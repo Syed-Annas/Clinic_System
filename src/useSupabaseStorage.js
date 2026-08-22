@@ -1,33 +1,71 @@
-import { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { useState, useEffect, useRef } from "react"
+import { supabase } from "./supabase"
 
 export function useSupabaseStorage(key, initialValue) {
-  const [value, setValue] = useState(initialValue);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [value, setValue] = useState(initialValue)
+  const [isInitialized, setIsInitialized] = useState(false)
+  const skipSave = useRef(false)
 
-  // Load from Supabase on mount
   useEffect(() => {
-    supabase.from('app_state').select('value').eq('key', key).single()
-      .then(({ data, error }) => {
-        if (data && data.value) {
-          setValue(data.value);
-        }
-        setIsInitialized(true);
-      })
-      .catch((err) => {
-        setIsInitialized(true);
-      });
+    let cancelled = false
 
-    // We could add real-time subscriptions here if we wanted!
-    // But this is enough to load centralized data on mount.
-  }, [key]);
+    async function load() {
+      const { data } = await supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", key)
+        .maybeSingle()
 
-  // Save to Supabase on change
-  useEffect(() => {
-    if (isInitialized) {
-      supabase.from('app_state').upsert({ key, value }).then();
+      if (cancelled) return
+
+      if (data && data.value !== undefined && data.value !== null) {
+        skipSave.current = true
+        setValue(data.value)
+      }
+
+      setIsInitialized(true)
     }
-  }, [key, value, isInitialized]);
 
-  return [value, setValue];
+    load()
+
+    const channel = supabase
+      .channel(`app_state:${key}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "app_state",
+          filter: `key=eq.${key}`,
+        },
+        (payload) => {
+          const next = payload.new?.value
+          if (next === undefined || next === null) return
+          skipSave.current = true
+          setValue(next)
+        },
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [key])
+
+  useEffect(() => {
+    if (!isInitialized) return
+
+    if (skipSave.current) {
+      skipSave.current = false
+      return
+    }
+
+    supabase
+      .from("app_state")
+      .upsert({ key, value }, { onConflict: "key" })
+      .then()
+  }, [key, value, isInitialized])
+
+  return [value, setValue]
 }
