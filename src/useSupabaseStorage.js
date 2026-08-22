@@ -1,71 +1,47 @@
 import { useState, useEffect, useRef } from "react"
-import { supabase } from "./supabase"
+import { loadAppState, saveAppState, subscribeAppState } from "./appStateSync"
 
 export function useSupabaseStorage(key, initialValue) {
   const [value, setValue] = useState(initialValue)
-  const [isInitialized, setIsInitialized] = useState(false)
+  const [ready, setReady] = useState(false)
   const skipSave = useRef(false)
+  const valueRef = useRef(value)
+  valueRef.current = value
 
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
-      const { data } = await supabase
-        .from("app_state")
-        .select("value")
-        .eq("key", key)
-        .maybeSingle()
-
+    loadAppState(key).then((remote) => {
       if (cancelled) return
-
-      if (data && data.value !== undefined && data.value !== null) {
+      if (remote !== undefined) {
         skipSave.current = true
-        setValue(data.value)
+        setValue(remote)
       }
+      setReady(true)
+    })
 
-      setIsInitialized(true)
-    }
-
-    load()
-
-    const channel = supabase
-      .channel(`app_state:${key}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "app_state",
-          filter: `key=eq.${key}`,
-        },
-        (payload) => {
-          const next = payload.new?.value
-          if (next === undefined || next === null) return
-          skipSave.current = true
-          setValue(next)
-        },
-      )
-      .subscribe()
+    const unsub = subscribeAppState(key, (next) => {
+      if (JSON.stringify(next) === JSON.stringify(valueRef.current)) return
+      skipSave.current = true
+      setValue(next)
+    })
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      unsub()
     }
   }, [key])
 
   useEffect(() => {
-    if (!isInitialized) return
+    if (!ready) return
 
     if (skipSave.current) {
       skipSave.current = false
       return
     }
 
-    supabase
-      .from("app_state")
-      .upsert({ key, value }, { onConflict: "key" })
-      .then()
-  }, [key, value, isInitialized])
+    saveAppState(key, value)
+  }, [key, value, ready])
 
   return [value, setValue]
 }
