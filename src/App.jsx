@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useSupabaseStorage } from "./useSupabaseStorage"
 
 function App() {
   // ============================================================
@@ -8,23 +9,14 @@ function App() {
   const clinicId = "SA1"
   const currentYear = new Date().getFullYear().toString().slice(-2)
 
-  const [clinic, setClinic] = useState(() => {
-    const savedClinic = localStorage.getItem("clinic")
-    return savedClinic
-      ? JSON.parse(savedClinic)
-      : {
-          clinicId: "SA1",
-          name: "Sarte Aesthetic Clinic",
-          phone: "",
-          address: "",
-          openingTime: "13:30",
-          closingTime: "21:00",
-        }
+  const [clinic, setClinic] = useSupabaseStorage("clinic", {
+    clinicId: "SA1",
+    name: "Sarte Aesthetic Clinic",
+    phone: "",
+    address: "",
+    openingTime: "13:30",
+    closingTime: "21:00",
   })
-
-  useEffect(() => {
-    localStorage.setItem("clinic", JSON.stringify(clinic))
-  }, [clinic])
 
   // ============================================================
   // LOGIN
@@ -45,45 +37,15 @@ function App() {
   // ACTIVE STAFF
   // ============================================================
 
-  const [activeStaff, setActiveStaff] = useState(() => {
-    const saved = localStorage.getItem("activeStaff")
-    return saved ? JSON.parse(saved) : []
-  })
-
-  useEffect(() => {
-    localStorage.setItem("activeStaff", JSON.stringify(activeStaff))
-  }, [activeStaff])
+  const [activeStaff, setActiveStaff] = useSupabaseStorage("activeStaff", [])
 
   // ============================================================
   // STAFF
   // ============================================================
 
-  const [staff, setStaff] = useState(() => {
-    const savedStaff = localStorage.getItem("staff")
+  const [staff, setStaff] = useSupabaseStorage("staff", [])
 
-    if (savedStaff) {
-      const parsedStaff = JSON.parse(savedStaff)
-      return parsedStaff.map((member) => ({
-        ...member,
-        clinicId: member.clinicId || "SA1",
-      }))
-    }
-
-    return []
-  })
-
-  const [nextStaffNumber, setNextStaffNumber] = useState(() => {
-    const saved = localStorage.getItem("nextStaffNumber")
-    return saved ? Number(saved) : 1
-  })
-
-  useEffect(() => {
-    localStorage.setItem("staff", JSON.stringify(staff))
-  }, [staff])
-
-  useEffect(() => {
-    localStorage.setItem("nextStaffNumber", nextStaffNumber)
-  }, [nextStaffNumber])
+  const [nextStaffNumber, setNextStaffNumber] = useSupabaseStorage("nextStaffNumber", 1)
 
   const [showStaffForm, setShowStaffForm] = useState(false)
   const [staffName, setStaffName] = useState("")
@@ -96,99 +58,54 @@ function App() {
   // THERAPIST AVAILABILITY
   // ============================================================
 
-  const [therapistAvailability, setTherapistAvailability] = useState(() => {
-    const saved = localStorage.getItem("therapistAvailability")
-    return saved ? JSON.parse(saved) : []
-  })
-
-  useEffect(() => {
-    localStorage.setItem(
-      "therapistAvailability",
-      JSON.stringify(therapistAvailability)
-    )
-  }, [therapistAvailability])
+  const [therapistAvailability, setTherapistAvailability] = useSupabaseStorage("therapistAvailability", [])
 
   // ============================================================
   // TREATMENTS
   // ============================================================
 
-  const [treatments, setTreatments] = useState(() => {
-    const saved = localStorage.getItem("treatments")
+  const [treatments, setTreatments] = useSupabaseStorage("treatments", [
+    {
+      clinicId: "SA1",
+      treatmentId: "TR001",
+      name: "Hydra Facial",
+      duration: 45,
+      sessions: 1,
+      price: 0,
+      status: "Active",
+    },
+    {
+      clinicId: "SA1",
+      treatmentId: "TR002",
+      name: "Chemical Peel",
+      duration: 20,
+      sessions: 1,
+      price: 0,
+      status: "Active",
+    },
+    {
+      clinicId: "SA1",
+      treatmentId: "TR003",
+      name: "Laser Hair Removal",
+      duration: 30,
+      sessions: 1,
+      price: 0,
+      status: "Active",
+    },
+    {
+      clinicId: "SA1",
+      treatmentId: "TR004",
+      name: "Skin Consultation",
+      duration: 30,
+      sessions: 1,
+      price: 0,
+      status: "Active",
+    },
+  ])
 
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      return parsed.map((item) => ({
-        ...item,
-        clinicId: item.clinicId || "SA1",
-        sessions: Number(item.sessions) || 1,
-        price: Number(item.price) || 0,
-      }))
-    }
+  const [nextTreatmentNumber, setNextTreatmentNumber] = useSupabaseStorage("nextTreatmentNumber", 5)
 
-    return [
-      {
-        clinicId: "SA1",
-        treatmentId: "TR001",
-        name: "Hydra Facial",
-        duration: 45,
-        sessions: 1,
-        price: 0,
-        status: "Active",
-      },
-      {
-        clinicId: "SA1",
-        treatmentId: "TR002",
-        name: "Chemical Peel",
-        duration: 20,
-        sessions: 1,
-        price: 0,
-        status: "Active",
-      },
-      {
-        clinicId: "SA1",
-        treatmentId: "TR003",
-        name: "Laser Hair Removal",
-        duration: 30,
-        sessions: 1,
-        price: 0,
-        status: "Active",
-      },
-      {
-        clinicId: "SA1",
-        treatmentId: "TR004",
-        name: "Skin Consultation",
-        duration: 30,
-        sessions: 1,
-        price: 0,
-        status: "Active",
-      },
-    ]
-  })
-
-  const [nextTreatmentNumber, setNextTreatmentNumber] = useState(() => {
-    const saved = localStorage.getItem("nextTreatmentNumber")
-    return saved ? Number(saved) : 5
-  })
-
-  const [treatmentHistory, setTreatmentHistory] = useState(() => {
-    const saved = localStorage.getItem("treatmentHistory")
-    return saved ? JSON.parse(saved) : []
-  })
-
-  useEffect(() => {
-    localStorage.setItem("treatments", JSON.stringify(treatments))
-  }, [treatments])
-
-  useEffect(() => {
-    localStorage.setItem("nextTreatmentNumber", nextTreatmentNumber)
-  }, [nextTreatmentNumber])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "treatmentHistory",
-      JSON.stringify(treatmentHistory)
-    )
-  }, [treatmentHistory])
+  const [treatmentHistory, setTreatmentHistory] = useSupabaseStorage("treatmentHistory", [])
 
   const [showTreatmentForm, setShowTreatmentForm] = useState(false)
   const [treatmentName, setTreatmentName] = useState("")
@@ -202,38 +119,26 @@ function App() {
   // ROOMS
   // ============================================================
 
-  const [rooms, setRooms] = useState(() => {
-    const saved = localStorage.getItem("rooms")
-
-    if (saved) {
-      return JSON.parse(saved)
-    }
-
-    return [
-      {
-        clinicId: "SA1",
-        roomId: "RM001",
-        name: "Room 1",
-        status: "Active",
-      },
-      {
-        clinicId: "SA1",
-        roomId: "RM002",
-        name: "Room 2",
-        status: "Active",
-      },
-      {
-        clinicId: "SA1",
-        roomId: "RM003",
-        name: "Room 3",
-        status: "Active",
-      },
-    ]
-  })
-
-  useEffect(() => {
-    localStorage.setItem("rooms", JSON.stringify(rooms))
-  }, [rooms])
+  const [rooms, setRooms] = useSupabaseStorage("rooms", [
+    {
+      clinicId: "SA1",
+      roomId: "RM001",
+      name: "Room 1",
+      status: "Active",
+    },
+    {
+      clinicId: "SA1",
+      roomId: "RM002",
+      name: "Room 2",
+      status: "Active",
+    },
+    {
+      clinicId: "SA1",
+      roomId: "RM003",
+      name: "Room 3",
+      status: "Active",
+    },
+  ])
 
   const [showRoomForm, setShowRoomForm] = useState(false)
   const [roomName, setRoomName] = useState("")
@@ -255,31 +160,15 @@ function App() {
   // APPOINTMENTS
   // ============================================================
 
-  const [appointments, setAppointments] = useState(() => {
-    const saved = localStorage.getItem("appointments")
-    return saved ? JSON.parse(saved) : []
-  })
+  const [appointments, setAppointments] = useSupabaseStorage("appointments", [])
 
-  const [appointmentHistory, setAppointmentHistory] = useState(() => {
-    const saved = localStorage.getItem("appointmentHistory")
-    return saved ? JSON.parse(saved) : []
-  })
+  const [appointmentHistory, setAppointmentHistory] = useSupabaseStorage("appointmentHistory", [])
 
   // ============================================================
   // INTERNAL APPOINTMENT ACTIVITY LOG
   // ============================================================
 
-  const [appointmentActivities, setAppointmentActivities] = useState(() => {
-    const saved = localStorage.getItem("appointmentActivities")
-    return saved ? JSON.parse(saved) : []
-  })
-
-  useEffect(() => {
-    localStorage.setItem(
-      "appointmentActivities",
-      JSON.stringify(appointmentActivities)
-    )
-  }, [appointmentActivities])
+  const [appointmentActivities, setAppointmentActivities] = useSupabaseStorage("appointmentActivities", [])
 
   const logAppointmentActivity = (appointment, action, details = {}) => {
     const activity = {
@@ -300,34 +189,11 @@ function App() {
     setAppointmentActivities((current) => [...current, activity])
   }
 
-  useEffect(() => {
-    localStorage.setItem("appointments", JSON.stringify(appointments))
-  }, [appointments])
-
-  useEffect(() => {
-    localStorage.setItem(
-      "appointmentHistory",
-      JSON.stringify(appointmentHistory)
-    )
-  }, [appointmentHistory])
-
   // ============================================================
   // RECEIPTS
   // ============================================================
 
-  const [nextReceiptNumber, setNextReceiptNumber] = useState(() => {
-    const saved = localStorage.getItem(
-      `nextReceiptNumber_${clinicId}_${currentYear}`
-    )
-    return saved ? Number(saved) : 1
-  })
-
-  useEffect(() => {
-    localStorage.setItem(
-      `nextReceiptNumber_${clinicId}_${currentYear}`,
-      nextReceiptNumber
-    )
-  }, [nextReceiptNumber, clinicId, currentYear])
+  const [nextReceiptNumber, setNextReceiptNumber] = useSupabaseStorage(`nextReceiptNumber_${clinicId}_${currentYear}`, 1)
 
   // ============================================================
   // APPOINTMENT FORM
@@ -353,17 +219,7 @@ function App() {
   const [assignedRoom, setAssignedRoom] = useState("")
   const [assignedTherapist, setAssignedTherapist] = useState("")
 
-  const [treatmentAssignments, setTreatmentAssignments] = useState(() => {
-    const saved = localStorage.getItem("treatmentAssignments")
-    return saved ? JSON.parse(saved) : []
-  })
-
-  useEffect(() => {
-    localStorage.setItem(
-      "treatmentAssignments",
-      JSON.stringify(treatmentAssignments)
-    )
-  }, [treatmentAssignments])
+  const [treatmentAssignments, setTreatmentAssignments] = useSupabaseStorage("treatmentAssignments", [])
 
   // ============================================================
   // DATE
