@@ -148,6 +148,15 @@ function App() {
   const [appointmentHistory, setAppointmentHistory] = useSupabaseStorage("appointmentHistory", [])
   const [appointmentActivities, setAppointmentActivities] = useSupabaseStorage("appointmentActivities", [])
 
+  useEffect(() => {
+    const cleanedHistory = appointmentHistory.filter(
+      (item) => item.status !== "Deleted" && item.historyStatus !== "Deleted"
+    )
+    if (cleanedHistory.length !== appointmentHistory.length) {
+      setAppointmentHistory(cleanedHistory)
+    }
+  }, [appointmentHistory, setAppointmentHistory])
+
   const logAppointmentActivity = (appointment, action, details = {}) => {
     const activity = {
       activityId: `ACT${Date.now()}${Math.floor(Math.random() * 1000)}`,
@@ -781,22 +790,19 @@ function App() {
   }
 
   const handleDeleteAppointment = (index) => {
-    if (!window.confirm("Are you sure you want to delete this appointment?")) return
+    const canDelete = ["Admin", "Manager", "Owner"].includes(currentUser?.role)
+    if (!canDelete) {
+      alert("Only Admin, Manager, or Owner users can delete appointments.")
+      return
+    }
+
     const target = appointments[index]
     if (!target) return
-
-    const historyItem = {
-      ...target,
-      status: "Deleted",
-      historyStatus: "Deleted",
-      historyAt: Date.now(),
-      deletedBy: {
-        clinicId,
-        userId: currentUser?.userId || username,
-        name: currentUser?.name || username,
-      },
+    if (Number(target.paidAmount || 0) > 0) {
+      alert("Appointments with received payment cannot be deleted.")
+      return
     }
-    setAppointmentHistory((curr) => [historyItem, ...curr])
+    if (!window.confirm("Are you sure you want to delete this appointment?")) return
     setAppointments((curr) => curr.filter((_, i) => i !== index))
     logAppointmentActivity(target, "Deleted Appointment")
   }
@@ -1073,6 +1079,7 @@ function App() {
 
   const formatCurrency = (val) => `Rs. ${Number(val || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
   const dashboardData = getDashboardData()
+  const canDeleteAppointments = ["Admin", "Manager", "Owner"].includes(currentUser?.role)
 
   // ============================================================
   // FILTERED APPOINTMENTS & TOP SUMMARY STATS (Option 1 & 2)
@@ -1421,7 +1428,7 @@ function App() {
                                   >
                                     💬
                                   </button>
-                                  {!isHistorical && <button
+                                  {!isHistorical && canDeleteAppointments && <button
                                     title="Delete"
                                     onClick={() => handleDeleteAppointment(index)}
                                     style={{
@@ -1536,7 +1543,7 @@ function App() {
                               </button>
                             )}
 
-                            {!isHistorical && <button
+                            {!isHistorical && canDeleteAppointments && <button
                               className="mobile-btn-action"
                               style={{ background: "#f1f5f9", color: "var(--text-main)", border: "1px solid var(--border)" }}
                               onClick={() => openRescheduleForm(apt, index)}
@@ -1670,7 +1677,7 @@ function App() {
                     </button>
 
                     <div className="inspector-action-buttons">
-                      {!selectedAppointment.isHistorical && <button
+                      {!selectedAppointment.isHistorical && canDeleteAppointments && <button
                         className="btn-secondary"
                         onClick={() => openRescheduleForm(selectedAppointment.apt, selectedAppointment.index)}
                       >
@@ -2663,6 +2670,7 @@ function App() {
                     <option value="Operator">Operator</option>
                     <option value="Therapist">Therapist</option>
                     <option value="Manager">Manager</option>
+                    <option value="Owner">Owner</option>
                   </select>
                 </div>
                 <div className="form-group">
