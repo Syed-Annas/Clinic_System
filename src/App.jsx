@@ -460,7 +460,8 @@ function App() {
 
   const openFollowUpForm = (historyItem, historyIndex) => {
     const totalSessions = Number(historyItem.sessions) || 1
-    const remainingSessions = getRemainingSessions(historyItem)
+    const isUnattended = historyItem.historyStatus === "Cancelled" || historyItem.historyStatus === "No Show"
+    const remainingSessions = isUnattended ? totalSessions : getRemainingSessions(historyItem)
     if (remainingSessions <= 0) return
 
     const followUpDate = todaySafe()
@@ -1021,7 +1022,9 @@ function App() {
       (item) => item.status !== "Cancelled" && item.historyStatus !== "Cancelled" && item.status !== "No Show" && item.historyStatus !== "No Show" && item.historyStatus !== "Deleted"
     )
     const revenue = validRecords.reduce((sum, item) => sum + Number(item.packagePrice || item.price || 0), 0)
-    const collected = validRecords.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
+    const collected = records
+      .filter((item) => item.status !== "Deleted" && item.historyStatus !== "Deleted")
+      .reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
     const outstanding = validRecords.reduce(
       (sum, item) => sum + Number(item.balance !== undefined ? item.balance : calculateBalance(item.packagePrice || item.price, item.paidAmount)),
       0
@@ -2209,13 +2212,13 @@ function App() {
                         <td style={{ color: "#16a34a" }}>{formatCurrency(item.paidAmount)}</td>
                         <td style={{ color: "#dc2626" }}>{formatCurrency(item.balance)}</td>
                         <td style={{ textAlign: "right" }}>
-                          {item.historyStatus === "Completed" && !item.followUpBooked && remainingSessions > 0 && (
+                          {["Completed", "Cancelled", "No Show"].includes(item.historyStatus) && !item.followUpBooked && remainingSessions > 0 && (
                             <button
                               className="btn-secondary"
                               style={{ padding: "4px 10px", fontSize: "12px" }}
                               onClick={() => openFollowUpForm(item, idx)}
                             >
-                              Book Next Session ({remainingSessions})
+                              {item.historyStatus === "Completed" ? "Book Next Session" : "Rebook Appointment"} ({remainingSessions})
                             </button>
                           )}
                         </td>
