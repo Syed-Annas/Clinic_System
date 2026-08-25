@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useSupabaseStorage } from "./useSupabaseStorage"
 import "./App.css"
 
@@ -1049,7 +1049,9 @@ function App() {
     return Array.from(byId.values())
   }
 
-  const getReceivedPayments = useCallback((range) => {
+  const getDashboardData = () => {
+    const range = getDashboardRange()
+    const records = getDashboardRecords()
     const allRecords = [...(appointments || []), ...(appointmentHistory || [])]
     const recordedPayments = new Map()
     ;(paymentRecords || []).forEach((payment) => {
@@ -1064,28 +1066,8 @@ function App() {
         receivedBy: item.bookedBy,
         treatment: item.treatment,
       }))
-
-    return [...(paymentRecords || []), ...legacyPayments]
+    const receivedPayments = [...(paymentRecords || []), ...legacyPayments]
       .filter((payment) => payment.receivedDate >= range.from && payment.receivedDate <= range.to)
-      .map((payment) => {
-        const appointment = allRecords.find((item) => item.appointmentId === payment.appointmentId)
-        return {
-          ...payment,
-          appointmentDate: payment.receivedDate,
-          customerName: appointment?.customerName || "Unknown customer",
-          treatment: payment.treatment || appointment?.treatment || "Payment",
-          status: "Payment Received",
-          packagePrice: Number(payment.amount || 0),
-          paidAmount: Number(payment.amount || 0),
-          balance: 0,
-        }
-      })
-  }, [appointments, appointmentHistory, paymentRecords])
-
-  const getDashboardData = () => {
-    const range = getDashboardRange()
-    const records = getDashboardRecords()
-    const receivedPayments = getReceivedPayments(range)
     const completed = records.filter((item) => item.status === "Completed" || item.historyStatus === "Completed")
     const cancelled = records.filter((item) => item.status === "Cancelled" || item.historyStatus === "Cancelled")
     const noShow = records.filter((item) => item.status === "No Show" || item.historyStatus === "No Show")
@@ -1229,7 +1211,6 @@ function App() {
       revenue,
       collected,
       outstanding,
-      receivedPayments,
       treatmentPerformance,
       staffBookingPerformance,
       staffTherapyPerformance,
@@ -1246,7 +1227,18 @@ function App() {
       const recordId = item.appointmentId || `${item.customerName}-${item.appointmentDate}-${item.appointmentTime}`
       recordsById.set(recordId, item)
     })
-    const ownPayments = getReceivedPayments({ from: "0000-01-01", to: "9999-12-31" }).filter(
+    const recordedPayments = new Map()
+    ;(paymentRecords || []).forEach((payment) => {
+      recordedPayments.set(payment.appointmentId, (recordedPayments.get(payment.appointmentId) || 0) + Number(payment.amount || 0))
+    })
+    const legacyPayments = Array.from(recordsById.values())
+      .filter((item) => Number(item.paidAmount || 0) > Number(recordedPayments.get(item.appointmentId) || 0))
+      .map((item) => ({
+        amount: Math.max(0, Number(item.paidAmount || 0) - Number(recordedPayments.get(item.appointmentId) || 0)),
+        receivedBy: item.bookedBy,
+        appointmentId: item.appointmentId,
+      }))
+    const ownPayments = [...(paymentRecords || []), ...legacyPayments].filter(
       (payment) => payment.receivedBy?.userId === currentUser.userId
     )
     const ownAppointments = Array.from(recordsById.values()).filter((item) => item.bookedBy?.userId === currentUser.userId)
@@ -1258,7 +1250,7 @@ function App() {
       fullyPaid,
       appointments: ownAppointments.length,
     }
-  }, [currentUser, incentiveRate, getReceivedPayments, appointments, appointmentHistory])
+  }, [appointments, appointmentHistory, currentUser, incentiveRate, paymentRecords])
   const canDeleteAppointments = ["Admin", "Manager", "Owner"].includes(currentUser?.role)
 
   // ============================================================
@@ -1296,14 +1288,13 @@ function App() {
 
   // Cumulative KPI Summary (Option 1 embedded into Option 2)
   const kpiStats = useMemo(() => {
-    const receivedPayments = getReceivedPayments({ from: selectedDate, to: selectedDate })
     const total = dayAppointments.length
     const active = dayAppointments.filter(({ apt }) => apt.status === "In Treatment" || apt.status === "Arrived").length
     const done = dayAppointments.filter(({ apt }) => apt.status === "Completed").length
-    const collected = receivedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    const collected = dayAppointments.reduce((sum, { apt }) => sum + Number(apt.paidAmount || 0), 0)
     const revenue = dayAppointments.reduce((sum, { apt }) => sum + Number(apt.packagePrice || 0), 0)
     return { total, active, done, collected, revenue }
-  }, [dayAppointments, selectedDate, getReceivedPayments])
+  }, [dayAppointments])
 
   const selectedAppointment = useMemo(() => {
     if (dayAppointments.length === 0) return null
@@ -2026,8 +2017,8 @@ function App() {
               </h3>
               <div className="kpi-summary-grid">
                 {[
-                  { label: "Revenue (Cash Received)", val: formatCurrency(dashboardData.revenue), records: dashboardData.receivedPayments, bg: "#ecfdf5", border: "#6ee7b7", color: "#064e3b" },
-                  { label: "Collected Cash / Paid", val: formatCurrency(dashboardData.collected), records: dashboardData.receivedPayments, bg: "#eff6ff", border: "#93c5fd", color: "#172554" },
+                  { label: "Revenue (Cash Received)", val: formatCurrency(dashboardData.revenue), records: dashboardData.records.filter((a) => a.status !== "Cancelled" && a.status !== "No Show"), bg: "#ecfdf5", border: "#6ee7b7", color: "#064e3b" },
+                  { label: "Collected Cash / Paid", val: formatCurrency(dashboardData.collected), records: dashboardData.records.filter((a) => Number(a.paidAmount) > 0), bg: "#eff6ff", border: "#93c5fd", color: "#172554" },
                   { label: "Outstanding Receivables", val: formatCurrency(dashboardData.outstanding), records: dashboardData.records.filter((a) => Number(a.balance) > 0), bg: "#fff1f2", border: "#fecdd3", color: "#881337" },
                 ].map((c) => (
                   <button
