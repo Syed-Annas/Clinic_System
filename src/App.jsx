@@ -206,6 +206,7 @@ function App() {
   const [appointments, setAppointments] = useSupabaseStorage("appointments", [])
   const [appointmentHistory, setAppointmentHistory] = useSupabaseStorage("appointmentHistory", [])
   const [appointmentActivities, setAppointmentActivities] = useSupabaseStorage("appointmentActivities", [])
+  const [paymentRecords, setPaymentRecords] = useSupabaseStorage("paymentRecords", [])
 
   useEffect(() => {
     const cleanedHistory = appointmentHistory.filter(
@@ -704,6 +705,19 @@ function App() {
         },
       }
       setAppointments((current) => [...current, followUpAppointment])
+      const additionalPayment = Math.max(0, numericPaid - Number(source.paidAmount || 0))
+      if (additionalPayment > 0) {
+        setPaymentRecords((current) => [...current, {
+          paymentId: `PAY${Date.now()}`,
+          appointmentId: followUpAppointment.appointmentId,
+          packageId: followUpAppointment.packageId,
+          amount: additionalPayment,
+          receivedDate: todaySafe(),
+          receivedAt: Date.now(),
+          receivedBy: followUpAppointment.bookedBy,
+          treatment: followUpAppointment.treatment,
+        }])
+      }
       setAppointmentHistory((current) => current.map((item, index) => (
         index === editingHistoryIndex ? { ...item, followUpBooked: true } : item
       )))
@@ -739,6 +753,19 @@ function App() {
       const nextAppointments = [...appointments]
       nextAppointments[editingIndex] = updated
       setAppointments(nextAppointments)
+      const additionalPayment = Math.max(0, numericPaid - Number(previous.paidAmount || 0))
+      if (additionalPayment > 0) {
+        setPaymentRecords((current) => [...current, {
+          paymentId: `PAY${Date.now()}`,
+          appointmentId: updated.appointmentId,
+          packageId: updated.packageId || updated.appointmentId,
+          amount: additionalPayment,
+          receivedDate: todaySafe(),
+          receivedAt: Date.now(),
+          receivedBy: updated.bookedBy,
+          treatment: updated.treatment,
+        }])
+      }
       logAppointmentActivity(updated, "Rescheduled", { from: previous, to: updated })
       resetAppointmentForm()
       return
@@ -779,6 +806,18 @@ function App() {
     }
 
     setAppointments([...appointments, newAppointment])
+    if (numericPaid > 0) {
+      setPaymentRecords((current) => [...current, {
+        paymentId: `PAY${Date.now()}`,
+        appointmentId: generatedAppointmentId,
+        packageId: generatedAppointmentId,
+        amount: numericPaid,
+        receivedDate: todaySafe(),
+        receivedAt: Date.now(),
+        receivedBy: newAppointment.bookedBy,
+        treatment: newAppointment.treatment,
+      }])
+    }
     setNextReceiptNumber((curr) => Number(curr) + 1)
     logAppointmentActivity(newAppointment, "Booked")
     resetAppointmentForm()
@@ -1013,6 +1052,22 @@ function App() {
   const getDashboardData = () => {
     const range = getDashboardRange()
     const records = getDashboardRecords()
+    const allRecords = [...(appointments || []), ...(appointmentHistory || [])]
+    const recordedPayments = new Map()
+    ;(paymentRecords || []).forEach((payment) => {
+      recordedPayments.set(payment.appointmentId, (recordedPayments.get(payment.appointmentId) || 0) + Number(payment.amount || 0))
+    })
+    const legacyPayments = allRecords
+      .filter((item) => Number(item.paidAmount || 0) > Number(recordedPayments.get(item.appointmentId) || 0))
+      .map((item) => ({
+        appointmentId: item.appointmentId,
+        amount: Math.max(0, Number(item.paidAmount || 0) - Number(recordedPayments.get(item.appointmentId) || 0)),
+        receivedDate: item.paymentDate || new Date(item.createdAt || Date.now()).toLocaleDateString("en-CA"),
+        receivedBy: item.bookedBy,
+        treatment: item.treatment,
+      }))
+    const receivedPayments = [...(paymentRecords || []), ...legacyPayments]
+      .filter((payment) => payment.receivedDate >= range.from && payment.receivedDate <= range.to)
     const completed = records.filter((item) => item.status === "Completed" || item.historyStatus === "Completed")
     const cancelled = records.filter((item) => item.status === "Cancelled" || item.historyStatus === "Cancelled")
     const noShow = records.filter((item) => item.status === "No Show" || item.historyStatus === "No Show")
@@ -1021,10 +1076,8 @@ function App() {
     const validRecords = records.filter(
       (item) => item.status !== "Cancelled" && item.historyStatus !== "Cancelled" && item.status !== "No Show" && item.historyStatus !== "No Show" && item.historyStatus !== "Deleted"
     )
-    const revenue = validRecords.reduce((sum, item) => sum + Number(item.packagePrice || item.price || 0), 0)
-    const collected = records
-      .filter((item) => item.status !== "Deleted" && item.historyStatus !== "Deleted")
-      .reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
+    const collected = receivedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    const revenue = collected
     const outstanding = validRecords.reduce(
       (sum, item) => sum + Number(item.balance !== undefined ? item.balance : calculateBalance(item.packagePrice || item.price, item.paidAmount)),
       0
@@ -1034,10 +1087,10 @@ function App() {
     // 1. TREATMENT PERFORMANCE ANALYTICS
     // ============================================================
     const treatmentStatsMap = {}
-    validRecords.forEach((item) => {
-      const tName = item.treatment || "Other / Consult"
-      const paid = Number(item.paidAmount || 0)
-      const sessions = Number(item.sessions || 1)
+    receivedPayments.forEach((payment) => {
+      const tName = payment.treatment || "Other / Consult"
+      const paid = Number(payment.amount || 0)
+      const sessions = 1
 
       if (!treatmentStatsMap[tName]) {
         treatmentStatsMap[tName] = { treatment: tName, sessions: 0, revenue: 0, bookings: 0 }
@@ -1045,6 +1098,23 @@ function App() {
       treatmentStatsMap[tName].sessions += sessions
       treatmentStatsMap[tName].revenue += paid
       treatmentStatsMap[tName].bookings += 1
+    })
+
+    validRecords.forEach((item) => {
+      const therapistId = item.therapist || ""
+      if (!therapistId) return
+      const therapistStaff = staff.find((s) => s.userId === therapistId)
+      if (!staffTherapyMap[therapistId]) {
+        staffTherapyMap[therapistId] = {
+          name: therapistStaff?.name || therapistId,
+          userId: therapistId,
+          role: "Therapist / Specialist",
+          treatmentsCount: 0,
+          sessionsCount: 0,
+        }
+      }
+      staffTherapyMap[therapistId].treatmentsCount += 1
+      staffTherapyMap[therapistId].sessionsCount += Number(item.sessions || 1)
     })
 
     const treatmentPerformance = Object.values(treatmentStatsMap)
@@ -1061,14 +1131,10 @@ function App() {
     const staffTherapyMap = {}
     const rateDecimal = Number(incentiveRate || 5) / 100
 
-    validRecords.forEach((item) => {
-      const paid = Number(item.paidAmount || 0)
-      const bookedByName = item.bookedBy?.name || item.bookedBy?.userId || "Front Desk / Online"
-      const bookedById = item.bookedBy?.userId || "UNKNOWN"
-      const therapistId = item.therapist || ""
-      const therapistStaff = staff.find((s) => s.userId === therapistId)
-      const therapistName = therapistStaff ? therapistStaff.name : (therapistId || "Unassigned Specialist")
-
+    receivedPayments.forEach((payment) => {
+      const paid = Number(payment.amount || 0)
+      const bookedByName = payment.receivedBy?.name || payment.receivedBy?.userId || "Front Desk / Online"
+      const bookedById = payment.receivedBy?.userId || "UNKNOWN"
       // A: Booked / Brought Customer
       if (!staffBookingMap[bookedById]) {
         staffBookingMap[bookedById] = {
@@ -1084,20 +1150,6 @@ function App() {
       staffBookingMap[bookedById].collectedRevenue += paid
       staffBookingMap[bookedById].incentive = Math.round(staffBookingMap[bookedById].collectedRevenue * rateDecimal)
 
-      // B: Performed Treatment (Specialist — performance tracking only, no incentive)
-      if (therapistId) {
-        if (!staffTherapyMap[therapistId]) {
-          staffTherapyMap[therapistId] = {
-            name: therapistName,
-            userId: therapistId,
-            role: "Therapist / Specialist",
-            treatmentsCount: 0,
-            sessionsCount: 0,
-          }
-        }
-        staffTherapyMap[therapistId].treatmentsCount += 1
-        staffTherapyMap[therapistId].sessionsCount += Number(item.sessions || 1)
-      }
     })
 
     // Include all active clinic therapists so their working hours and activity are visible
@@ -1175,13 +1227,22 @@ function App() {
       const recordId = item.appointmentId || `${item.customerName}-${item.appointmentDate}-${item.appointmentTime}`
       recordsById.set(recordId, item)
     })
-    const ownAppointments = Array.from(recordsById.values()).filter((item) => (
-      item.bookedBy?.userId === currentUser.userId &&
-      item.status !== "Cancelled" && item.historyStatus !== "Cancelled" &&
-      item.status !== "No Show" && item.historyStatus !== "No Show" &&
-      item.status !== "Deleted" && item.historyStatus !== "Deleted"
-    ))
-    const receivedCash = ownAppointments.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
+    const recordedPayments = new Map()
+    ;(paymentRecords || []).forEach((payment) => {
+      recordedPayments.set(payment.appointmentId, (recordedPayments.get(payment.appointmentId) || 0) + Number(payment.amount || 0))
+    })
+    const legacyPayments = Array.from(recordsById.values())
+      .filter((item) => Number(item.paidAmount || 0) > Number(recordedPayments.get(item.appointmentId) || 0))
+      .map((item) => ({
+        amount: Math.max(0, Number(item.paidAmount || 0) - Number(recordedPayments.get(item.appointmentId) || 0)),
+        receivedBy: item.bookedBy,
+        appointmentId: item.appointmentId,
+      }))
+    const ownPayments = [...(paymentRecords || []), ...legacyPayments].filter(
+      (payment) => payment.receivedBy?.userId === currentUser.userId
+    )
+    const ownAppointments = Array.from(recordsById.values()).filter((item) => item.bookedBy?.userId === currentUser.userId)
+    const receivedCash = ownPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
     const fullyPaid = ownAppointments.filter((item) => Number(item.balance || 0) <= 0 && Number(item.paidAmount || 0) > 0).length
     return {
       receivedCash,
@@ -1189,7 +1250,7 @@ function App() {
       fullyPaid,
       appointments: ownAppointments.length,
     }
-  }, [appointments, appointmentHistory, currentUser, incentiveRate])
+  }, [appointments, appointmentHistory, currentUser, incentiveRate, paymentRecords])
   const canDeleteAppointments = ["Admin", "Manager", "Owner"].includes(currentUser?.role)
 
   // ============================================================
@@ -1956,7 +2017,7 @@ function App() {
               </h3>
               <div className="kpi-summary-grid">
                 {[
-                  { label: "Revenue (Booked Value)", val: formatCurrency(dashboardData.revenue), records: dashboardData.records.filter((a) => a.status !== "Cancelled" && a.status !== "No Show"), bg: "#ecfdf5", border: "#6ee7b7", color: "#064e3b" },
+                  { label: "Revenue (Cash Received)", val: formatCurrency(dashboardData.revenue), records: dashboardData.records.filter((a) => a.status !== "Cancelled" && a.status !== "No Show"), bg: "#ecfdf5", border: "#6ee7b7", color: "#064e3b" },
                   { label: "Collected Cash / Paid", val: formatCurrency(dashboardData.collected), records: dashboardData.records.filter((a) => Number(a.paidAmount) > 0), bg: "#eff6ff", border: "#93c5fd", color: "#172554" },
                   { label: "Outstanding Receivables", val: formatCurrency(dashboardData.outstanding), records: dashboardData.records.filter((a) => Number(a.balance) > 0), bg: "#fff1f2", border: "#fecdd3", color: "#881337" },
                 ].map((c) => (
