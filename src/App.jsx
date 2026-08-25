@@ -1244,7 +1244,7 @@ function App() {
 
         {/* NAVIGATION TABS */}
         <nav className="clinic-nav-tabs">
-          {currentUser?.role === "Admin" && (
+          {["Admin", "Owner"].includes(currentUser?.role) && (
             <button
               className={`nav-tab-btn ${activeSection === "Dashboard" ? "active" : ""}`}
               onClick={() => setActiveSection("Dashboard")}
@@ -1736,7 +1736,7 @@ function App() {
         {/* ======================================================
             DASHBOARD TAB (MANAGEMENT DASHBOARD + ANALYTICS)
         ====================================================== */}
-        {activeSection === "Dashboard" && currentUser?.role === "Admin" && (
+        {activeSection === "Dashboard" && ["Admin", "Owner"].includes(currentUser?.role) && (
           <div>
             <div className="content-card">
               {/* DASHBOARD HEADER & PERIOD SHIFTER */}
@@ -2139,7 +2139,7 @@ function App() {
           <div className="content-card">
             <div className="content-header">
               <h2>Staff & Therapists Management</h2>
-              {currentUser?.role === "Admin" && (
+              {["Admin", "Owner"].includes(currentUser?.role) && (
                 <button
                   className="btn-primary-cta"
                   onClick={() => {
@@ -2161,7 +2161,7 @@ function App() {
                     <th>Role</th>
                     <th>Status</th>
                     <th>On Duty</th>
-                    {currentUser?.role === "Admin" && <th style={{ textAlign: "right" }}>Actions</th>}
+                    {["Admin", "Owner"].includes(currentUser?.role) && <th style={{ textAlign: "right" }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -2184,7 +2184,7 @@ function App() {
                             {isOnDuty ? "🟢 Logged In" : "⚪ Offline"}
                           </span>
                         </td>
-                        {currentUser?.role === "Admin" && (
+                        {["Admin", "Owner"].includes(currentUser?.role) && (
                           <td style={{ textAlign: "right" }}>
                             <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                               <button
@@ -2231,7 +2231,7 @@ function App() {
           <div className="content-card">
             <div className="content-header">
               <h2>Treatments & Services Catalog</h2>
-              {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+              {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                 <button
                   className="btn-primary-cta"
                   onClick={() => {
@@ -2254,7 +2254,7 @@ function App() {
                     <th>Default Sessions</th>
                     <th>Price</th>
                     <th>Status</th>
-                    {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                    {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                       <th style={{ textAlign: "right" }}>Actions</th>
                     )}
                   </tr>
@@ -2272,7 +2272,7 @@ function App() {
                           {t.status}
                         </span>
                       </td>
-                      {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                      {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                         <td style={{ textAlign: "right" }}>
                           <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                             <button
@@ -2319,7 +2319,7 @@ function App() {
           <div className="content-card">
             <div className="content-header">
               <h2>Treatment Rooms & Suites</h2>
-              {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+              {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                 <button
                   className="btn-primary-cta"
                   onClick={() => {
@@ -2339,7 +2339,7 @@ function App() {
                     <th>Room ID</th>
                     <th>Room Name</th>
                     <th>Status</th>
-                    {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                    {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                       <th style={{ textAlign: "right" }}>Actions</th>
                     )}
                   </tr>
@@ -2354,7 +2354,7 @@ function App() {
                           {r.status}
                         </span>
                       </td>
-                      {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                      {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
                         <td style={{ textAlign: "right" }}>
                           <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                             <button
