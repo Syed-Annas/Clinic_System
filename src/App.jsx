@@ -1100,6 +1100,8 @@ function App() {
       (sum, item) => sum + Number(item.balance !== undefined ? item.balance : calculateBalance(item.packagePrice || item.price, item.paidAmount)),
       0
     )
+    const staffBookingMap = {}
+    const staffTherapyMap = {}
 
     // ============================================================
     // 1. TREATMENT PERFORMANCE ANALYTICS
@@ -1145,8 +1147,6 @@ function App() {
     // ============================================================
     // 2. STAFF PERFORMANCE & SALES INCENTIVE (BASED ON PAID AMOUNT)
     // ============================================================
-    const staffBookingMap = {}
-    const staffTherapyMap = {}
     const rateDecimal = Number(incentiveRate || 5) / 100
 
     receivedPayments.forEach((payment) => {
