@@ -138,6 +138,7 @@ function App() {
   const [clinicAddress, setClinicAddress] = useState("")
   const [clinicOpeningTime, setClinicOpeningTime] = useState("")
   const [clinicClosingTime, setClinicClosingTime] = useState("")
+  const [clinicSettingsTab, setClinicSettingsTab] = useState("Staff")
 
   // ============================================================
   // APPOINTMENTS & HISTORY
@@ -1227,27 +1228,6 @@ function App() {
             📜 History ({appointmentHistory.length})
           </button>
 
-          <button
-            className={`nav-tab-btn ${activeSection === "Staff" ? "active" : ""}`}
-            onClick={() => setActiveSection("Staff")}
-          >
-            👥 Staff ({staff.length})
-          </button>
-
-          <button
-            className={`nav-tab-btn ${activeSection === "Treatments" ? "active" : ""}`}
-            onClick={() => setActiveSection("Treatments")}
-          >
-            💉 Treatments ({treatments.length})
-          </button>
-
-          <button
-            className={`nav-tab-btn ${activeSection === "Rooms" ? "active" : ""}`}
-            onClick={() => setActiveSection("Rooms")}
-          >
-            🚪 Rooms ({rooms.length})
-          </button>
-
           {currentUser?.role === "Admin" && (
             <button
               className={`nav-tab-btn ${activeSection === "Clinic" ? "active" : ""}`}
@@ -2116,7 +2096,7 @@ function App() {
         {/* ======================================================
             STAFF TAB
         ====================================================== */}
-        {activeSection === "Staff" && (
+        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Staff" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Staff & Therapists Management</h2>
@@ -2208,7 +2188,7 @@ function App() {
         {/* ======================================================
             TREATMENTS TAB
         ====================================================== */}
-        {activeSection === "Treatments" && (
+        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Treatments" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Treatments & Services Catalog</h2>
@@ -2296,7 +2276,7 @@ function App() {
         {/* ======================================================
             ROOMS TAB
         ====================================================== */}
-        {activeSection === "Rooms" && (
+        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Rooms" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Treatment Rooms & Suites</h2>
@@ -2392,6 +2372,18 @@ function App() {
               >
                 ✏️ Edit Settings
               </button>
+            </div>
+
+            <div className="status-filter-pills" style={{ marginBottom: "20px" }}>
+              {["Staff", "Treatments", "Rooms"].map((tab) => (
+                <button
+                  key={tab}
+                  className={`filter-pill-btn ${clinicSettingsTab === tab ? "active" : ""}`}
+                  onClick={() => setClinicSettingsTab(tab)}
+                >
+                  {tab === "Staff" ? `👥 Staff (${staff.length})` : tab === "Treatments" ? `💉 Treatments (${treatments.length})` : `🚪 Rooms (${rooms.length})`}
+                </button>
+              ))}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
