@@ -276,6 +276,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
   const [selectedAppointmentIndex, setSelectedAppointmentIndex] = useState(0)
+  const [selectedAppointmentKey, setSelectedAppointmentKey] = useState(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
 
   // ============================================================
@@ -1233,11 +1234,14 @@ function App() {
 
   const selectedAppointment = useMemo(() => {
     if (dayAppointments.length === 0) return null
-    if (selectedAppointmentIndex < dayAppointments.length) {
-      return dayAppointments[selectedAppointmentIndex]
+    if (selectedAppointmentKey) {
+      const selected = dayAppointments.find(({ apt }) => (
+        (apt.appointmentId || apt.receiptId) === selectedAppointmentKey
+      ))
+      if (selected) return selected
     }
-    return dayAppointments[0]
-  }, [dayAppointments, selectedAppointmentIndex])
+    return dayAppointments[Math.min(selectedAppointmentIndex, dayAppointments.length - 1)]
+  }, [dayAppointments, selectedAppointmentIndex, selectedAppointmentKey])
 
   // ============================================================
   // UNAUTHENTICATED LOGIN SCREEN
@@ -1468,7 +1472,9 @@ function App() {
                       </thead>
                       <tbody>
                         {filteredDayAppointments.map(({ apt, index, isHistorical }) => {
-                          const isSelected = selectedAppointment?.index === index
+                          const isSelected = selectedAppointment && (
+                            (selectedAppointment.apt.appointmentId || selectedAppointment.apt.receiptId) === (apt.appointmentId || apt.receiptId)
+                          )
                           const roomObj = rooms.find((r) => r.roomId === apt.room)
                           const staffObj = staff.find((s) => s.userId === apt.therapist)
 
@@ -1476,7 +1482,10 @@ function App() {
                             <tr
                               key={apt.appointmentId || index}
                               className={isSelected ? "selected" : ""}
-                              onClick={() => setSelectedAppointmentIndex(index)}
+                              onClick={() => {
+                                setSelectedAppointmentIndex(index)
+                                setSelectedAppointmentKey(apt.appointmentId || apt.receiptId)
+                              }}
                             >
                               <td style={{ fontWeight: 600 }}>
                                 {apt.appointmentTime}
@@ -1579,7 +1588,14 @@ function App() {
                       const staffObj = staff.find((s) => s.userId === apt.therapist)
 
                       return (
-                        <div key={apt.appointmentId || index} className="mobile-appointment-card">
+                        <div
+                          key={apt.appointmentId || index}
+                          className="mobile-appointment-card"
+                          onClick={() => {
+                            setSelectedAppointmentIndex(index)
+                            setSelectedAppointmentKey(apt.appointmentId || apt.receiptId)
+                          }}
+                        >
                           <div className="mobile-card-top">
                             <div className="mobile-card-patient">
                               <div className="mobile-patient-avatar">
