@@ -608,6 +608,9 @@ function App() {
         },
       }
       setAppointments((current) => [...current, followUpAppointment])
+      setAppointmentHistory((current) => current.map((item, index) => (
+        index === editingHistoryIndex ? { ...item, followUpBooked: true } : item
+      )))
       logAppointmentActivity(followUpAppointment, "Follow-up Session Booked")
       resetAppointmentForm()
       return
@@ -2080,7 +2083,7 @@ function App() {
                         <td style={{ color: "#16a34a" }}>{formatCurrency(item.paidAmount)}</td>
                         <td style={{ color: "#dc2626" }}>{formatCurrency(item.balance)}</td>
                         <td style={{ textAlign: "right" }}>
-                          {item.historyStatus === "Completed" && remainingSessions > 0 && (
+                          {item.historyStatus === "Completed" && !item.followUpBooked && remainingSessions > 0 && (
                             <button
                               className="btn-secondary"
                               style={{ padding: "4px 10px", fontSize: "12px" }}
