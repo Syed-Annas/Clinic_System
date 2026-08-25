@@ -68,6 +68,11 @@ function App() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [browserSessionId] = useState(getBrowserSessionId)
+  const [showProfile, setShowProfile] = useState(false)
+  const [profileName, setProfileName] = useState("")
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState("")
+  const [profileNewPassword, setProfileNewPassword] = useState("")
+  const [profileMessage, setProfileMessage] = useState("")
 
   // ============================================================
   // NAVIGATION
@@ -123,6 +128,14 @@ function App() {
 
   const [staff, setStaff] = useSupabaseStorage("staff", [])
   const [nextStaffNumber, setNextStaffNumber] = useSupabaseStorage("nextStaffNumber", 1)
+  const [adminProfile, setAdminProfile] = useSupabaseStorage("adminProfile", {
+    clinicId: "SA1",
+    userId: "ADMIN",
+    username: "admin",
+    name: "Administrator",
+    password: "admin123",
+    role: "Admin",
+  })
 
   const [showStaffForm, setShowStaffForm] = useState(false)
   const [staffName, setStaffName] = useState("")
@@ -483,12 +496,12 @@ function App() {
     // Ensure viewing today's appointments by default upon login
     setSelectedDate(todaySafe())
 
-    if (username === "admin" && password === "admin123") {
+    if (username === adminProfile.username && password === adminProfile.password) {
       const adminUser = {
         clinicId,
         userId: "ADMIN",
-        name: "Administrator",
-        username: "admin",
+        name: adminProfile.name,
+        username: adminProfile.username,
         role: "Admin",
       }
       setCurrentUser(adminUser)
@@ -525,6 +538,45 @@ function App() {
     }
 
     alert("Invalid username or password.")
+  }
+
+  const openProfile = () => {
+    setProfileName(currentUser?.name || "")
+    setProfileCurrentPassword("")
+    setProfileNewPassword("")
+    setProfileMessage("")
+    setShowProfile(true)
+  }
+
+  const handleProfileSave = (event) => {
+    event.preventDefault()
+    const staffIndex = staff.findIndex((member) => member.userId === currentUser?.userId)
+    const existingPassword = currentUser?.role === "Admin"
+      ? adminProfile.password
+      : staff[staffIndex]?.password
+
+    if (profileCurrentPassword !== existingPassword) {
+      setProfileMessage("Current password is incorrect.")
+      return
+    }
+    if (!profileName.trim() || !profileNewPassword.trim()) {
+      setProfileMessage("Enter your name and a new password.")
+      return
+    }
+
+    const updatedUser = { ...currentUser, name: profileName.trim() }
+    if (currentUser.role === "Admin") {
+      setAdminProfile({ ...adminProfile, name: profileName.trim(), password: profileNewPassword })
+    } else if (staffIndex !== -1) {
+      const updatedStaff = [...staff]
+      updatedStaff[staffIndex] = { ...updatedStaff[staffIndex], name: profileName.trim(), password: profileNewPassword }
+      setStaff(updatedStaff)
+    }
+    setCurrentUser(updatedUser)
+    setStoredAuthSession(updatedUser)
+    setProfileCurrentPassword("")
+    setProfileNewPassword("")
+    setProfileMessage("Profile updated successfully.")
   }
 
   const handleLogout = () => {
@@ -1111,6 +1163,29 @@ function App() {
 
   const formatCurrency = (val) => `Rs. ${Number(val || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
   const dashboardData = getDashboardData()
+  const profileIncentive = useMemo(() => {
+    if (!currentUser) return { receivedCash: 0, incentive: 0, fullyPaid: 0, appointments: 0 }
+
+    const recordsById = new Map()
+    ;[...(appointments || []), ...(appointmentHistory || [])].forEach((item) => {
+      const recordId = item.appointmentId || `${item.customerName}-${item.appointmentDate}-${item.appointmentTime}`
+      recordsById.set(recordId, item)
+    })
+    const ownAppointments = Array.from(recordsById.values()).filter((item) => (
+      item.bookedBy?.userId === currentUser.userId &&
+      item.status !== "Cancelled" && item.historyStatus !== "Cancelled" &&
+      item.status !== "No Show" && item.historyStatus !== "No Show" &&
+      item.status !== "Deleted" && item.historyStatus !== "Deleted"
+    ))
+    const receivedCash = ownAppointments.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
+    const fullyPaid = ownAppointments.filter((item) => Number(item.balance || 0) <= 0 && Number(item.paidAmount || 0) > 0).length
+    return {
+      receivedCash,
+      incentive: Math.round(receivedCash * (Number(incentiveRate || 5) / 100)),
+      fullyPaid,
+      appointments: ownAppointments.length,
+    }
+  }, [appointments, appointmentHistory, currentUser, incentiveRate])
   const canDeleteAppointments = ["Admin", "Manager", "Owner"].includes(currentUser?.role)
 
   // ============================================================
@@ -1231,10 +1306,16 @@ function App() {
               <span>+</span> New Appointment
             </button>
 
-            <div className="user-badge">
+            <button
+              type="button"
+              className="user-badge"
+              onClick={openProfile}
+              title="Open profile"
+              style={{ cursor: "pointer", border: "none" }}
+            >
               <span>👤 {currentUser?.name}</span>
               <span className="role-pill">{currentUser?.role}</span>
-            </div>
+            </button>
 
             <button className="btn-logout" onClick={handleLogout}>
               Logout
@@ -2454,6 +2535,72 @@ function App() {
           </div>
         )}
       </main>
+
+      {showProfile && (
+        <div className="modal-backdrop" onClick={() => setShowProfile(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>My Profile</h2>
+              <button className="btn-close-modal" onClick={() => setShowProfile(false)}>✕</button>
+            </div>
+
+            <div className="inspector-section">
+              <div className="inspector-row">
+                <span className="label">Name</span>
+                <span className="val">{currentUser?.name}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">User ID</span>
+                <span className="val">{currentUser?.userId}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Role</span>
+                <span className="val">{currentUser?.role}</span>
+              </div>
+            </div>
+
+            <div className="inspector-section">
+              <h3 style={{ marginTop: 0 }}>Appointment Incentive</h3>
+              <div className="inspector-row">
+                <span className="label">Your appointments</span>
+                <span className="val">{profileIncentive.appointments}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Received cash</span>
+                <span className="val">{formatCurrency(profileIncentive.receivedCash)}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Fully paid appointments</span>
+                <span className="val">{profileIncentive.fullyPaid}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Incentive earned ({incentiveRate}%)</span>
+                <strong className="val" style={{ color: "#15803d" }}>{formatCurrency(profileIncentive.incentive)}</strong>
+              </div>
+            </div>
+
+            <form onSubmit={handleProfileSave}>
+              <div className="form-group">
+                <label>Name</label>
+                <input className="form-control" value={profileName} onChange={(e) => setProfileName(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Current Password</label>
+                <input type="password" className="form-control" value={profileCurrentPassword} onChange={(e) => setProfileCurrentPassword(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>New Password</label>
+                <input type="password" className="form-control" value={profileNewPassword} onChange={(e) => setProfileNewPassword(e.target.value)} minLength="6" required />
+              </div>
+              {profileMessage && <p style={{ color: profileMessage.includes("successfully") ? "#15803d" : "#dc2626", fontSize: "13px" }}>{profileMessage}</p>}
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowProfile(false)}>Close</button>
+                <button type="submit" className="btn-primary-cta">Save Profile</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================
           MODAL: NEW / EDIT APPOINTMENT FORM
