@@ -4,7 +4,7 @@ const SYNC = "_cs"
 const PREFIX = "v2:"
 
 const listeners = new Map()
-let channel
+let channel = null
 let started = false
 
 function isEnvelope(value) {
@@ -19,23 +19,25 @@ function isEnvelope(value) {
 }
 
 function unwrap(value) {
-  if (value === undefined) return null
+  if (value === undefined || value === null) return null
   if (isEnvelope(value)) return { v: Number(value.v) || 0, d: value.d }
   return { v: 1, d: value }
 }
 
 function wrap(v, d) {
-  return { [SYNC]: 1, v, d }
-}
-
-function storageKey(key) {
-  return `${PREFIX}${key}`
+  return { [SYNC]: 1, v, d, ts: Date.now() }
 }
 
 function notify(key, payload) {
   const set = listeners.get(key)
   if (!set) return
-  for (const fn of set) fn(payload)
+  for (const fn of set) {
+    try {
+      fn(payload)
+    } catch (err) {
+      console.error(`Error notifying listener for ${key}:`, err)
+    }
+  }
 }
 
 function pickBest(rows) {
@@ -44,40 +46,83 @@ function pickBest(rows) {
 }
 
 async function readKey(dbKey) {
-  const { data, error } = await supabase
-    .from("app_state")
-    .select("value")
-    .eq("key", dbKey)
+  try {
+    const { data, error } = await supabase
+      .from("app_state")
+      .select("value")
+      .eq("key", dbKey)
 
-  if (error) return { ok: false, error }
+    if (error) return { ok: false, error }
 
-  const versions = (data || [])
-    .map((row) => unwrap(row.value))
-    .filter(Boolean)
+    const versions = (data || [])
+      .map((row) => unwrap(row.value))
+      .filter(Boolean)
 
-  if (!versions.length) return { ok: true, missing: true }
-  return { ok: true, missing: false, ...pickBest(versions) }
+    if (!versions.length) return { ok: true, missing: true }
+    return { ok: true, missing: false, ...pickBest(versions) }
+  } catch (err) {
+    return { ok: false, error: err }
+  }
 }
 
-async function refreshAll() {
-  const { data, error } = await supabase.from("app_state").select("key,value")
-  if (error) {
-    console.error("Failed to load clinic data", error)
-    return
-  }
+export async function refreshAll() {
+  try {
+    const { data, error } = await supabase.from("app_state").select("key,value")
+    if (error) {
+      if (error.code !== "42501") {
+        console.warn("Supabase refresh warning:", error.message || error)
+      }
+      return
+    }
 
-  const byKey = new Map()
-  for (const row of data || []) {
-    if (!row.key?.startsWith(PREFIX)) continue
-    const key = row.key.slice(PREFIX.length)
-    const parsed = unwrap(row.value)
-    if (!parsed) continue
-    const prev = byKey.get(key)
-    if (!prev || parsed.v >= prev.v) byKey.set(key, parsed)
-  }
+    const byKey = new Map()
+    for (const row of data || []) {
+      if (!row.key) continue
+      // Handle both "v2:appointments" and "appointments"
+      const normalizedKey = row.key.startsWith(PREFIX)
+        ? row.key.slice(PREFIX.length)
+        : row.key
 
-  for (const [key, payload] of byKey) {
-    notify(key, payload)
+      const parsed = unwrap(row.value)
+      if (!parsed) continue
+
+      const prev = byKey.get(normalizedKey)
+      if (!prev || parsed.v >= prev.v) {
+        byKey.set(normalizedKey, parsed)
+      }
+    }
+
+    for (const [key, payload] of byKey) {
+      notify(key, payload)
+    }
+  } catch (err) {
+    console.warn("Error refreshing clinic state from Supabase:", err)
+  }
+}
+
+function setupRealtimeChannel() {
+  try {
+    if (channel) {
+      try {
+        supabase.removeChannel(channel)
+      } catch {}
+    }
+
+    channel = supabase
+      .channel("clinic-app-state-v2", {
+        config: { broadcast: { self: false } },
+      })
+      .on("broadcast", { event: "state" }, ({ payload }) => {
+        if (payload?.key == null || payload.v == null) return
+        notify(payload.key, { v: payload.v, d: payload.d })
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          refreshAll()
+        }
+      })
+  } catch (err) {
+    console.warn("Could not subscribe to Supabase broadcast channel:", err)
   }
 }
 
@@ -85,23 +130,36 @@ function ensureStarted() {
   if (started) return
   started = true
 
-  channel = supabase
-    .channel("clinic-app-state-v2", {
-      config: { broadcast: { self: false } },
-    })
-    .on("broadcast", { event: "state" }, ({ payload }) => {
-      if (payload?.key == null || payload.v == null) return
-      notify(payload.key, { v: payload.v, d: payload.d })
-    })
-    .subscribe()
-
+  setupRealtimeChannel()
   refreshAll()
-  setInterval(refreshAll, 5000)
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refreshAll()
-  })
-  window.addEventListener("focus", refreshAll)
+  // Poll every 3 seconds for mobile devices where WebSockets sleep in background
+  setInterval(refreshAll, 3000)
+
+  // Mobile lifecycle listeners: re-sync & reconnect when mobile browser wakes up
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        setupRealtimeChannel()
+        refreshAll()
+      }
+    })
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("focus", () => {
+      setupRealtimeChannel()
+      refreshAll()
+    })
+    window.addEventListener("pageshow", () => {
+      setupRealtimeChannel()
+      refreshAll()
+    })
+    window.addEventListener("online", () => {
+      setupRealtimeChannel()
+      refreshAll()
+    })
+  }
 }
 
 export function subscribeAppState(key, onValue) {
@@ -114,46 +172,54 @@ export function subscribeAppState(key, onValue) {
 }
 
 export async function loadAppState(key) {
-  const current = await readKey(storageKey(key))
-  if (!current.ok) return current
-  if (!current.missing) return current
+  // First try direct key
+  const direct = await readKey(key)
+  if (direct.ok && !direct.missing) return direct
 
-  const legacy = await readKey(key)
-  if (!legacy.ok) return legacy
-  if (legacy.missing) return { ok: true, missing: true }
+  // Next try prefixed key
+  const prefixed = await readKey(`${PREFIX}${key}`)
+  if (prefixed.ok && !prefixed.missing) return prefixed
 
-  return { ...legacy, migrated: true }
+  if (!direct.ok && !prefixed.ok) return direct
+  return { ok: true, missing: true }
 }
 
 export async function saveAppState(key, v, d) {
   ensureStarted()
-  const dbKey = storageKey(key)
   const value = wrap(v, d)
 
-  const { error: upsertError } = await supabase
-    .from("app_state")
-    .upsert({ key: dbKey, value }, { onConflict: "key" })
-
-  if (upsertError) {
-    const { data: updated, error: updateError } = await supabase
-      .from("app_state")
-      .update({ value })
-      .eq("key", dbKey)
-      .select("key")
-
-    if (updateError) {
-      console.error("Failed to save", key, updateError)
-    } else if (!updated?.length) {
-      const { error: insertError } = await supabase
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const { error: upsertError } = await supabase
         .from("app_state")
-        .insert({ key: dbKey, value })
-      if (insertError) console.error("Failed to save", key, insertError)
+        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" })
+
+      if (!upsertError) {
+        try {
+          await channel?.send({
+            type: "broadcast",
+            event: "state",
+            payload: { key, v, d },
+          })
+        } catch (err) {
+          console.warn("Realtime broadcast send failed:", err)
+        }
+        return true
+      }
+
+      if (attempt === 3 || upsertError.code === "42501") {
+        console.error("Supabase save failed:", key, upsertError)
+        return false
+      }
+    } catch (err) {
+      if (attempt === 3) {
+        console.error("Supabase save exception:", key, err)
+        return false
+      }
     }
+
+    await new Promise((resolve) => setTimeout(resolve, attempt * 500))
   }
 
-  await channel?.send({
-    type: "broadcast",
-    event: "state",
-    payload: { key, v, d },
-  })
+  return false
 }

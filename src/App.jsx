@@ -1,5 +1,21 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useSupabaseStorage } from "./useSupabaseStorage"
+import "./App.css"
+
+function getBrowserSessionId() {
+  const storageKey = "cs_browser_session_id"
+  try {
+    const existing = localStorage.getItem(storageKey)
+    if (existing) return existing
+    const generated = typeof crypto?.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    localStorage.setItem(storageKey, generated)
+    return generated
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+}
 
 function App() {
   // ============================================================
@@ -19,13 +35,14 @@ function App() {
   })
 
   // ============================================================
-  // LOGIN
+  // LOGIN & AUTH
   // ============================================================
 
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [browserSessionId] = useState(getBrowserSessionId)
 
   // ============================================================
   // NAVIGATION
@@ -34,17 +51,31 @@ function App() {
   const [activeSection, setActiveSection] = useState("Appointments")
 
   // ============================================================
-  // ACTIVE STAFF
+  // ADMIN DASHBOARD
+  // ============================================================
+
+  function todaySafe() {
+    return new Date().toLocaleDateString("en-CA")
+  }
+
+  const [dashboardPeriod, setDashboardPeriod] = useState("Today")
+  const [dashboardFromDate, setDashboardFromDate] = useState(() => todaySafe())
+  const [dashboardToDate, setDashboardToDate] = useState(() => todaySafe())
+  const [dashboardDrilldown, setDashboardDrilldown] = useState(null)
+  const [incentiveRate, setIncentiveRate] = useState(5) // 5% default incentive
+
+  // ============================================================
+  // ACTIVE STAFF & ON DUTY
   // ============================================================
 
   const [activeStaff, setActiveStaff] = useSupabaseStorage("activeStaff", [])
+  const [staffWorkLogs, setStaffWorkLogs] = useSupabaseStorage("staffWorkLogs", [])
 
   // ============================================================
-  // STAFF
+  // STAFF MANAGEMENT
   // ============================================================
 
   const [staff, setStaff] = useSupabaseStorage("staff", [])
-
   const [nextStaffNumber, setNextStaffNumber] = useSupabaseStorage("nextStaffNumber", 1)
 
   const [showStaffForm, setShowStaffForm] = useState(false)
@@ -65,46 +96,13 @@ function App() {
   // ============================================================
 
   const [treatments, setTreatments] = useSupabaseStorage("treatments", [
-    {
-      clinicId: "SA1",
-      treatmentId: "TR001",
-      name: "Hydra Facial",
-      duration: 45,
-      sessions: 1,
-      price: 0,
-      status: "Active",
-    },
-    {
-      clinicId: "SA1",
-      treatmentId: "TR002",
-      name: "Chemical Peel",
-      duration: 20,
-      sessions: 1,
-      price: 0,
-      status: "Active",
-    },
-    {
-      clinicId: "SA1",
-      treatmentId: "TR003",
-      name: "Laser Hair Removal",
-      duration: 30,
-      sessions: 1,
-      price: 0,
-      status: "Active",
-    },
-    {
-      clinicId: "SA1",
-      treatmentId: "TR004",
-      name: "Skin Consultation",
-      duration: 30,
-      sessions: 1,
-      price: 0,
-      status: "Active",
-    },
+    { clinicId: "SA1", treatmentId: "TR001", name: "Hydra Facial", duration: 45, sessions: 1, price: 0, status: "Active" },
+    { clinicId: "SA1", treatmentId: "TR002", name: "Chemical Peel", duration: 20, sessions: 1, price: 0, status: "Active" },
+    { clinicId: "SA1", treatmentId: "TR003", name: "Laser Hair Removal", duration: 30, sessions: 1, price: 0, status: "Active" },
+    { clinicId: "SA1", treatmentId: "TR004", name: "Skin Consultation", duration: 30, sessions: 1, price: 0, status: "Active" },
   ])
 
   const [nextTreatmentNumber, setNextTreatmentNumber] = useSupabaseStorage("nextTreatmentNumber", 5)
-
   const [treatmentHistory, setTreatmentHistory] = useSupabaseStorage("treatmentHistory", [])
 
   const [showTreatmentForm, setShowTreatmentForm] = useState(false)
@@ -120,24 +118,9 @@ function App() {
   // ============================================================
 
   const [rooms, setRooms] = useSupabaseStorage("rooms", [
-    {
-      clinicId: "SA1",
-      roomId: "RM001",
-      name: "Room 1",
-      status: "Active",
-    },
-    {
-      clinicId: "SA1",
-      roomId: "RM002",
-      name: "Room 2",
-      status: "Active",
-    },
-    {
-      clinicId: "SA1",
-      roomId: "RM003",
-      name: "Room 3",
-      status: "Active",
-    },
+    { clinicId: "SA1", roomId: "RM001", name: "Room 1", status: "Active" },
+    { clinicId: "SA1", roomId: "RM002", name: "Room 2", status: "Active" },
+    { clinicId: "SA1", roomId: "RM003", name: "Room 3", status: "Active" },
   ])
 
   const [showRoomForm, setShowRoomForm] = useState(false)
@@ -157,17 +140,11 @@ function App() {
   const [clinicClosingTime, setClinicClosingTime] = useState("")
 
   // ============================================================
-  // APPOINTMENTS
+  // APPOINTMENTS & HISTORY
   // ============================================================
 
   const [appointments, setAppointments] = useSupabaseStorage("appointments", [])
-
   const [appointmentHistory, setAppointmentHistory] = useSupabaseStorage("appointmentHistory", [])
-
-  // ============================================================
-  // INTERNAL APPOINTMENT ACTIVITY LOG
-  // ============================================================
-
   const [appointmentActivities, setAppointmentActivities] = useSupabaseStorage("appointmentActivities", [])
 
   const logAppointmentActivity = (appointment, action, details = {}) => {
@@ -185,7 +162,6 @@ function App() {
       timestamp: Date.now(),
       details,
     }
-
     setAppointmentActivities((current) => [...current, activity])
   }
 
@@ -196,13 +172,13 @@ function App() {
   const [nextReceiptNumber, setNextReceiptNumber] = useSupabaseStorage(`nextReceiptNumber_${clinicId}_${currentYear}`, 1)
 
   // ============================================================
-  // APPOINTMENT FORM
+  // APPOINTMENT FORM MODAL STATE
   // ============================================================
 
   const [showForm, setShowForm] = useState(false)
   const [customerName, setCustomerName] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
-  const [appointmentDate, setAppointmentDate] = useState("")
+  const [appointmentDate, setAppointmentDate] = useState(() => todaySafe())
   const [appointmentTime, setAppointmentTime] = useState("")
   const [treatment, setTreatment] = useState("")
   const [appointmentSessions, setAppointmentSessions] = useState(1)
@@ -211,22 +187,24 @@ function App() {
   const [editingIndex, setEditingIndex] = useState(null)
 
   // ============================================================
-  // TREATMENT ASSIGNMENT
+  // TREATMENT ASSIGNMENT MODAL / DROPDOWN
   // ============================================================
 
-  const [assigningAppointmentIndex, setAssigningAppointmentIndex] =
-    useState(null)
+  const [assigningAppointmentIndex, setAssigningAppointmentIndex] = useState(null)
   const [assignedRoom, setAssignedRoom] = useState("")
   const [assignedTherapist, setAssignedTherapist] = useState("")
-
   const [treatmentAssignments, setTreatmentAssignments] = useSupabaseStorage("treatmentAssignments", [])
 
   // ============================================================
-  // DATE
+  // DATE & SEARCH & INSPECTOR (Option 2 Split-View)
   // ============================================================
 
-  const today = new Date().toLocaleDateString("en-CA")
-  const [selectedDate, setSelectedDate] = useState(today)
+  const today = todaySafe()
+  const [selectedDate, setSelectedDate] = useState(() => todaySafe())
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("All")
+  const [selectedAppointmentIndex, setSelectedAppointmentIndex] = useState(0)
+  const [showAssignModal, setShowAssignModal] = useState(false)
 
   // ============================================================
   // HELPER FUNCTIONS
@@ -234,10 +212,7 @@ function App() {
 
   const getTreatment = (treatmentNameValue) => {
     return treatments.find(
-      (item) =>
-        item.clinicId === clinicId &&
-        item.name === treatmentNameValue &&
-        item.status === "Active"
+      (item) => item.clinicId === clinicId && item.name === treatmentNameValue && item.status === "Active"
     )
   }
 
@@ -262,72 +237,36 @@ function App() {
 
   const getAvailableTherapists = () => {
     return staff.filter((member) => {
-      if (
-        member.clinicId !== clinicId ||
-        member.role !== "Therapist" ||
-        member.status !== "Active"
-      ) {
+      if (member.clinicId !== clinicId || member.role !== "Therapist" || member.status !== "Active") {
         return false
       }
-
-      const loggedIn = activeStaff.some(
-        (active) => active.userId === member.userId
-      )
-
-      if (!loggedIn) {
-        return false
-      }
-
+      const loggedIn = activeStaff.some((active) => active.userId === member.userId)
+      if (!loggedIn) return false
       const alreadyTreating = appointments.some(
-        (appointment) =>
-          appointment.therapist === member.userId &&
-          appointment.status === "In Treatment"
+        (appointment) => appointment.therapist === member.userId && appointment.status === "In Treatment"
       )
-
       return !alreadyTreating
     })
   }
 
   const findFirstAvailableTime = (date, duration = 30) => {
-    if (!date) {
-      return ""
-    }
-
-    const [openingHour, openingMinute] =
-      clinic.openingTime.split(":").map(Number)
-    const [closingHour, closingMinute] =
-      clinic.closingTime.split(":").map(Number)
+    if (!date) return ""
+    const [openingHour, openingMinute] = (clinic.openingTime || "13:30").split(":").map(Number)
+    const [closingHour, closingMinute] = (clinic.closingTime || "21:00").split(":").map(Number)
 
     const openingMinutes = openingHour * 60 + openingMinute
     const closingMinutes = closingHour * 60 + closingMinute
 
-    const activeRooms = rooms.filter(
-      (room) =>
-        room.clinicId === clinicId &&
-        room.status === "Active"
-    )
+    const activeRooms = rooms.filter((room) => room.clinicId === clinicId && room.status === "Active")
+    if (activeRooms.length === 0) return ""
 
-    if (activeRooms.length === 0) {
-      return ""
-    }
-
-    for (
-      let totalMinutes = openingMinutes;
-      totalMinutes < closingMinutes;
-      totalMinutes += 15
-    ) {
+    for (let totalMinutes = openingMinutes; totalMinutes < closingMinutes; totalMinutes += 15) {
       const appointmentEndMinutes = totalMinutes + Number(duration)
-
-      if (appointmentEndMinutes > closingMinutes) {
-        continue
-      }
+      if (appointmentEndMinutes > closingMinutes) continue
 
       const hour = Math.floor(totalMinutes / 60)
       const minute = totalMinutes % 60
-
-      const time =
-        `${String(hour).padStart(2, "0")}:` +
-        `${String(minute).padStart(2, "0")}`
+      const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
 
       const start = new Date(`${date}T${time}:00`)
       const end = new Date(start)
@@ -335,55 +274,24 @@ function App() {
 
       const roomAvailable = activeRooms.some((room) => {
         return !appointments.some((appointment, appointmentIndex) => {
-          if (
-            editingIndex !== null &&
-            appointmentIndex === editingIndex
-          ) {
-            return false
-          }
+          if (editingIndex !== null && appointmentIndex === editingIndex) return false
+          if (appointment.room !== room.roomId || appointment.appointmentDate !== date) return false
+          if (appointment.status === "Cancelled" || appointment.status === "No Show") return false
+          if (!appointment.appointmentTime || !appointment.endTime) return false
 
-          if (
-            appointment.room !== room.roomId ||
-            appointment.appointmentDate !== date
-          ) {
-            return false
-          }
-
-          if (
-            appointment.status === "Cancelled" ||
-            appointment.status === "No Show"
-          ) {
-            return false
-          }
-
-          if (!appointment.appointmentTime || !appointment.endTime) {
-            return false
-          }
-
-          const existingStart = new Date(
-            `${appointment.appointmentDate}T${appointment.appointmentTime}:00`
-          )
-          const existingEnd = new Date(
-            `${appointment.appointmentDate}T${appointment.endTime}:00`
-          )
-
+          const existingStart = new Date(`${appointment.appointmentDate}T${appointment.appointmentTime}:00`)
+          const existingEnd = new Date(`${appointment.appointmentDate}T${appointment.endTime}:00`)
           return existingStart < end && existingEnd > start
         })
       })
 
-      if (roomAvailable) {
-        return time
-      }
+      if (roomAvailable) return time
     }
-
     return ""
   }
 
   const calculateEndTime = (startTime, duration) => {
-    if (!startTime || !duration) {
-      return ""
-    }
-
+    if (!startTime || !duration) return ""
     const start = new Date(`1970-01-01T${startTime}:00`)
     start.setMinutes(start.getMinutes() + Number(duration))
     return start.toTimeString().slice(0, 5)
@@ -392,7 +300,7 @@ function App() {
   const resetAppointmentForm = () => {
     setCustomerName("")
     setPhoneNumber("")
-    setAppointmentDate("")
+    setAppointmentDate(todaySafe())
     setAppointmentTime("")
     setTreatment("")
     setAppointmentSessions(1)
@@ -428,9 +336,10 @@ function App() {
     setShowRoomForm(false)
   }
 
+  // DEFAULT APPOINTMENT DATE IS TODAY
   const openNewAppointmentForm = () => {
-    const firstTime = findFirstAvailableTime(today, 30)
-
+    const todayDate = todaySafe()
+    const firstTime = findFirstAvailableTime(todayDate, 30)
     setEditingIndex(null)
     setCustomerName("")
     setPhoneNumber("")
@@ -438,7 +347,7 @@ function App() {
     setAppointmentSessions(1)
     setAppointmentPrice(0)
     setPaidAmount(0)
-    setAppointmentDate(today)
+    setAppointmentDate(todayDate)
     setAppointmentTime(firstTime)
     setShowForm(true)
   }
@@ -447,21 +356,17 @@ function App() {
     setEditingIndex(index)
     setCustomerName(appointment.customerName || "")
     setPhoneNumber(appointment.phoneNumber || "")
-    setAppointmentDate(appointment.appointmentDate || "")
+    setAppointmentDate(appointment.appointmentDate || todaySafe())
     setAppointmentTime(appointment.appointmentTime || "")
     setTreatment(appointment.treatment || "")
-    setAppointmentSessions(
-      Number(appointment.sessions) || getTreatmentSessions(appointment.treatment)
-    )
-    setAppointmentPrice(
-      Number(appointment.packagePrice) || getTreatmentPrice(appointment.treatment)
-    )
+    setAppointmentSessions(Number(appointment.sessions) || getTreatmentSessions(appointment.treatment))
+    setAppointmentPrice(Number(appointment.packagePrice) || getTreatmentPrice(appointment.treatment))
     setPaidAmount(Number(appointment.paidAmount) || 0)
     setShowForm(true)
   }
 
   // ============================================================
-  // LOGIN
+  // LOGIN / LOGOUT HANDLERS
   // ============================================================
 
   const handleLogin = () => {
@@ -473,6 +378,9 @@ function App() {
         member.status === "Active"
     )
 
+    // Ensure viewing today's appointments by default upon login
+    setSelectedDate(todaySafe())
+
     if (username === "admin" && password === "admin123") {
       const adminUser = {
         clinicId,
@@ -481,25 +389,37 @@ function App() {
         username: "admin",
         role: "Admin",
       }
-
       setCurrentUser(adminUser)
       setIsLoggedIn(true)
       return
     }
 
     if (staffMember) {
-      setCurrentUser(staffMember)
+      const activeSessions = activeStaff.filter(
+        (member) => member.clinicId === clinicId && member.userId === staffMember.userId
+      )
+      const currentSessionExists = activeSessions.some(
+        (member) => member.sessionId === browserSessionId
+      )
+
+      if (!currentSessionExists && activeSessions.length >= 2) {
+        alert("This user is already logged in on two devices or browsers.")
+        return
+      }
+
+      setCurrentUser({ ...staffMember, sessionId: browserSessionId })
       setIsLoggedIn(true)
 
       setActiveStaff((current) => {
-        const alreadyActive = current.some(
-          (member) => member.userId === staffMember.userId
+        const alreadyActive = current.some((member) => member.sessionId === browserSessionId)
+        if (alreadyActive) return current
+
+        const activeSessions = current.filter(
+          (member) => member.clinicId === clinicId && member.userId === staffMember.userId
         )
+        if (activeSessions.length >= 2) return current
 
-        if (alreadyActive) {
-          return current
-        }
-
+        const now = Date.now()
         return [
           ...current,
           {
@@ -507,12 +427,12 @@ function App() {
             userId: staffMember.userId,
             name: staffMember.name,
             role: staffMember.role,
-            loggedInAt: Date.now(),
-            activeSince: Date.now(),
+            sessionId: browserSessionId,
+            loggedInAt: now,
+            activeSince: now,
           },
         ]
       })
-
       return
     }
 
@@ -521,13 +441,29 @@ function App() {
 
   const handleLogout = () => {
     if (currentUser && currentUser.role !== "Admin") {
-      setActiveStaff((current) =>
-        current.filter(
-          (member) => member.userId !== currentUser.userId
-        )
+      const activeEntry = activeStaff.find(
+        (member) => member.sessionId === currentUser.sessionId
       )
-    }
+      const loginTime = activeEntry?.loggedInAt || activeEntry?.activeSince || Date.now()
+      const logoutTime = Date.now()
+      const durationMs = Math.max(0, logoutTime - loginTime)
+      const logDate = new Date(loginTime).toLocaleDateString("en-CA")
 
+      setStaffWorkLogs((curr) => [
+        ...curr,
+        {
+          clinicId,
+          userId: currentUser.userId,
+          name: currentUser.name,
+          role: currentUser.role,
+          date: logDate,
+          loginTime,
+          logoutTime,
+          durationMs,
+        },
+      ])
+      setActiveStaff((current) => current.filter((member) => member.sessionId !== currentUser.sessionId))
+    }
     setCurrentUser(null)
     setIsLoggedIn(false)
     setUsername("")
@@ -535,2150 +471,2274 @@ function App() {
   }
 
   // ============================================================
-  // LOGIN SCREEN
+  // DATE NAVIGATION FOR APPOINTMENTS TAB
+  // ============================================================
+
+  const handleShiftDate = (days) => {
+    const d = new Date(selectedDate || todaySafe())
+    d.setDate(d.getDate() + days)
+    setSelectedDate(d.toLocaleDateString("en-CA"))
+  }
+
+  // ============================================================
+  // APPOINTMENT CRUD & BUSINESS LOGIC
+  // ============================================================
+
+  const handleBookingSubmit = (e) => {
+    if (e) e.preventDefault()
+
+    if (!customerName || !phoneNumber || !appointmentDate || !appointmentTime || !treatment) {
+      alert("Please complete all appointment details.")
+      return
+    }
+
+    const duration = getTreatmentDuration(treatment)
+    const endTime = calculateEndTime(appointmentTime, duration)
+    const numericPrice = Number(appointmentPrice || 0)
+    const numericPaid = Number(paidAmount || 0)
+
+    if (numericPrice < 0 || numericPaid < 0) {
+      alert("Price and paid amount cannot be negative.")
+      return
+    }
+
+    const activeRooms = rooms.filter((r) => r.clinicId === clinicId && r.status === "Active")
+    const selectedStart = new Date(`${appointmentDate}T${appointmentTime}:00`)
+    const selectedEnd = new Date(`${appointmentDate}T${endTime}:00`)
+
+    const availableRoom = activeRooms.find((room) => {
+      return !appointments.some((apt, idx) => {
+        if (editingIndex !== null && idx === editingIndex) return false
+        if (apt.room !== room.roomId || apt.appointmentDate !== appointmentDate) return false
+        if (apt.status === "Cancelled" || apt.status === "No Show") return false
+        if (!apt.appointmentTime || !apt.endTime) return false
+
+        const existingStart = new Date(`${apt.appointmentDate}T${apt.appointmentTime}:00`)
+        const existingEnd = new Date(`${apt.appointmentDate}T${apt.endTime}:00`)
+        return existingStart < selectedEnd && existingEnd > selectedStart
+      })
+    })
+
+    if (!availableRoom) {
+      alert("All active treatment rooms are occupied at this time. Please select another slot.")
+      return
+    }
+
+    if (editingIndex !== null) {
+      // RESCHEDULE / EDIT
+      const previous = appointments[editingIndex]
+      const updated = {
+        ...previous,
+        customerName,
+        phoneNumber,
+        appointmentDate,
+        appointmentTime,
+        endTime,
+        duration,
+        treatment,
+        sessions: appointmentSessions,
+        packagePrice: numericPrice,
+        paidAmount: numericPaid,
+        balance: calculateBalance(numericPrice, numericPaid),
+        room: availableRoom.roomId,
+        rescheduledBy: {
+          clinicId,
+          userId: currentUser?.userId || username,
+          name: currentUser?.name || username,
+        },
+      }
+
+      const nextAppointments = [...appointments]
+      nextAppointments[editingIndex] = updated
+      setAppointments(nextAppointments)
+      logAppointmentActivity(updated, "Rescheduled", { from: previous, to: updated })
+      resetAppointmentForm()
+      return
+    }
+
+    // NEW APPOINTMENT
+    const paddedNum = String(nextReceiptNumber).padStart(3, "0")
+    const generatedReceiptId = `${clinicId}${currentYear}${paddedNum}`
+    const generatedAppointmentId = `APT${Date.now()}`
+
+    const newAppointment = {
+      clinicId,
+      appointmentId: generatedAppointmentId,
+      receiptId: generatedReceiptId,
+      customerName,
+      phoneNumber,
+      appointmentDate,
+      appointmentTime,
+      endTime,
+      duration,
+      treatment,
+      sessions: appointmentSessions,
+      packagePrice: numericPrice,
+      paidAmount: numericPaid,
+      balance: calculateBalance(numericPrice, numericPaid),
+      status: "Booked",
+      room: availableRoom.roomId,
+      therapist: "",
+      createdAt: Date.now(),
+      bookedBy: {
+        clinicId,
+        userId: currentUser?.userId || username,
+        name: currentUser?.name || username,
+      },
+    }
+
+    setAppointments([...appointments, newAppointment])
+    setNextReceiptNumber((curr) => Number(curr) + 1)
+    logAppointmentActivity(newAppointment, "Booked")
+    resetAppointmentForm()
+  }
+
+  const handleStatusChange = (index, newStatus) => {
+    const target = appointments[index]
+    if (!target) return
+
+    if (newStatus === "Completed" || newStatus === "Cancelled" || newStatus === "No Show") {
+      const historyItem = {
+        ...target,
+        status: newStatus,
+        historyStatus: newStatus,
+        historyAt: Date.now(),
+        closedBy: {
+          clinicId,
+          userId: currentUser?.userId || username,
+          name: currentUser?.name || username,
+        },
+      }
+      setAppointmentHistory((curr) => [historyItem, ...curr])
+      setAppointments((curr) => curr.filter((_, i) => i !== index))
+      logAppointmentActivity(target, `Status changed to ${newStatus}`)
+      return
+    }
+
+    const updated = [...appointments]
+    updated[index] = { ...updated[index], status: newStatus }
+    setAppointments(updated)
+    logAppointmentActivity(updated[index], `Status changed to ${newStatus}`)
+  }
+
+  const handleAssignTreatment = (index) => {
+    if (!assignedRoom || !assignedTherapist) {
+      alert("Please select both a Room and a Therapist.")
+      return
+    }
+
+    const roomBusy = appointments.some(
+      (a, i) => i !== index && a.room === assignedRoom && a.status === "In Treatment"
+    )
+    if (roomBusy) {
+      alert("This room is currently occupied with another patient.")
+      return
+    }
+
+    const therapistBusy = appointments.some(
+      (a, i) => i !== index && a.therapist === assignedTherapist && a.status === "In Treatment"
+    )
+    if (therapistBusy) {
+      alert("This therapist is already in treatment with another patient.")
+      return
+    }
+
+    const updated = [...appointments]
+    const currentApt = {
+      ...updated[index],
+      room: assignedRoom,
+      therapist: assignedTherapist,
+      status: "In Treatment",
+      treatmentStartedAt: Date.now(),
+      assignedBy: {
+        clinicId,
+        userId: currentUser?.userId || username,
+        name: currentUser?.name || username,
+      },
+    }
+    updated[index] = currentApt
+    setAppointments(updated)
+
+    setTreatmentAssignments((curr) => [
+      ...curr,
+      {
+        clinicId,
+        appointmentId: currentApt.appointmentId,
+        receiptId: currentApt.receiptId,
+        room: assignedRoom,
+        therapist: assignedTherapist,
+        assignedAt: Date.now(),
+      },
+    ])
+    logAppointmentActivity(currentApt, "Assigned Treatment")
+    setShowAssignModal(false)
+    setAssigningAppointmentIndex(null)
+  }
+
+  const handleDeleteAppointment = (index) => {
+    if (!window.confirm("Are you sure you want to delete this appointment?")) return
+    const target = appointments[index]
+    if (!target) return
+
+    const historyItem = {
+      ...target,
+      status: "Deleted",
+      historyStatus: "Deleted",
+      historyAt: Date.now(),
+      deletedBy: {
+        clinicId,
+        userId: currentUser?.userId || username,
+        name: currentUser?.name || username,
+      },
+    }
+    setAppointmentHistory((curr) => [historyItem, ...curr])
+    setAppointments((curr) => curr.filter((_, i) => i !== index))
+    logAppointmentActivity(target, "Deleted Appointment")
+  }
+
+  const handleWhatsAppRedirect = (appointment) => {
+    let phone = (appointment.phoneNumber || "").trim().replace(/[^0-9+]/g, "")
+    if (phone.startsWith("03")) {
+      phone = "92" + phone.slice(1)
+    } else if (phone.startsWith("+")) {
+      phone = phone.slice(1)
+    }
+
+    const roomName = rooms.find((r) => r.roomId === appointment.room)?.name || "Assigned Room"
+    const therapistName = staff.find((s) => s.userId === appointment.therapist)?.name || "Assigned Specialist"
+
+    const message = encodeURIComponent(
+      `*✨ ${clinic.name} - Official Booking Receipt ✨*\n\n` +
+      `📄 *Receipt ID:* ${appointment.receiptId}\n` +
+      `👤 *Patient Name:* ${appointment.customerName}\n` +
+      `💉 *Treatment:* ${appointment.treatment}\n` +
+      `🔢 *Sessions:* ${appointment.sessions || 1}\n` +
+      `📅 *Date:* ${appointment.appointmentDate}\n` +
+      `⏰ *Time:* ${appointment.appointmentTime} - ${appointment.endTime}\n` +
+      `🚪 *Room:* ${roomName}\n` +
+      `🩺 *Specialist:* ${therapistName}\n\n` +
+      `💵 *Package Price:* Rs. ${Number(appointment.packagePrice || 0).toLocaleString()}\n` +
+      `💳 *Paid Amount:* Rs. ${Number(appointment.paidAmount || 0).toLocaleString()}\n` +
+      `⚠️ *Balance Due:* Rs. ${Number(appointment.balance || 0).toLocaleString()}\n\n` +
+      `📞 *Clinic Phone:* ${clinic.phone || "-"}\n` +
+      `📍 *Address:* ${clinic.address || "-"}\n\n` +
+      `Thank you for choosing ${clinic.name}!\n` +
+      `Operating Hours: ${clinic.openingTime} - ${clinic.closingTime}`
+    )
+
+    window.open(`https://wa.me/${phone}?text=${message}`, "_blank")
+  }
+
+  // ============================================================
+  // DASHBOARD CALCULATIONS & DATE SHIFTER
+  // ============================================================
+
+  const getDashboardRange = () => {
+    const now = new Date()
+    const todayValue = now.toLocaleDateString("en-CA")
+
+    if (dashboardPeriod === "Today") return { from: todayValue, to: todayValue }
+    if (dashboardPeriod === "Yesterday") {
+      const d = new Date(now)
+      d.setDate(d.getDate() - 1)
+      const val = d.toLocaleDateString("en-CA")
+      return { from: val, to: val }
+    }
+    if (dashboardPeriod === "This Week") {
+      const d = new Date(now)
+      const day = d.getDay()
+      const offset = day === 0 ? -6 : 1 - day
+      d.setDate(d.getDate() + offset)
+      return { from: d.toLocaleDateString("en-CA"), to: todayValue }
+    }
+    if (dashboardPeriod === "This Month") {
+      const from = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString("en-CA")
+      return { from, to: todayValue }
+    }
+    if (dashboardPeriod === "Last Month") {
+      const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastMonthEnd = new Date(firstThisMonth)
+      lastMonthEnd.setDate(0)
+      const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1)
+      return { from: lastMonthStart.toLocaleDateString("en-CA"), to: lastMonthEnd.toLocaleDateString("en-CA") }
+    }
+    return { from: dashboardFromDate || todayValue, to: dashboardToDate || todayValue }
+  }
+
+  const handleDashboardShift = (direction) => {
+    // Quick period shifter for Dashboard
+    if (dashboardPeriod === "Today" || dashboardPeriod === "Yesterday") {
+      const base = dashboardPeriod === "Today" ? new Date() : new Date(Date.now() - 86400000)
+      base.setDate(base.getDate() + (direction * 1))
+      const nextD = base.toLocaleDateString("en-CA")
+      setDashboardPeriod("Custom Date Range")
+      setDashboardFromDate(nextD)
+      setDashboardToDate(nextD)
+      return
+    }
+
+    if (dashboardPeriod === "This Month") {
+      if (direction === -1) setDashboardPeriod("Last Month")
+      return
+    }
+
+    if (dashboardPeriod === "Last Month") {
+      if (direction === 1) setDashboardPeriod("This Month")
+      return
+    }
+
+    if (dashboardPeriod === "Custom Date Range") {
+      const from = new Date(dashboardFromDate || todaySafe())
+      const to = new Date(dashboardToDate || todaySafe())
+      const diffTime = Math.abs(to - from) || 86400000
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1
+      from.setDate(from.getDate() + (direction * diffDays))
+      to.setDate(to.getDate() + (direction * diffDays))
+      setDashboardFromDate(from.toLocaleDateString("en-CA"))
+      setDashboardToDate(to.toLocaleDateString("en-CA"))
+    }
+  }
+
+  const getDashboardRecords = () => {
+    const range = getDashboardRange()
+    const active = (appointments || []).filter(
+      (item) => (item.clinicId || clinicId) === clinicId && item.appointmentDate >= range.from && item.appointmentDate <= range.to
+    )
+    const history = (appointmentHistory || []).filter(
+      (item) => (item.clinicId || clinicId) === clinicId && item.appointmentDate >= range.from && item.appointmentDate <= range.to
+    )
+    const byId = new Map()
+    active.forEach((item) => byId.set(item.appointmentId || item.receiptId || `${item.customerName}-${item.appointmentDate}-${item.appointmentTime}`, item))
+    history.forEach((item) => byId.set(item.appointmentId || item.receiptId || `${item.customerName}-${item.appointmentDate}-${item.appointmentTime}`, item))
+    return Array.from(byId.values())
+  }
+
+  const getDashboardData = () => {
+    const range = getDashboardRange()
+    const records = getDashboardRecords()
+    const completed = records.filter((item) => item.status === "Completed" || item.historyStatus === "Completed")
+    const cancelled = records.filter((item) => item.status === "Cancelled" || item.historyStatus === "Cancelled")
+    const noShow = records.filter((item) => item.status === "No Show" || item.historyStatus === "No Show")
+    const upcoming = records.filter((item) => item.status === "Booked" || item.status === "Arrived" || item.status === "In Treatment")
+
+    const validRecords = records.filter(
+      (item) => item.status !== "Cancelled" && item.historyStatus !== "Cancelled" && item.status !== "No Show" && item.historyStatus !== "No Show" && item.historyStatus !== "Deleted"
+    )
+    const revenue = validRecords.reduce((sum, item) => sum + Number(item.packagePrice || item.price || 0), 0)
+    const collected = validRecords.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0)
+    const outstanding = validRecords.reduce(
+      (sum, item) => sum + Number(item.balance !== undefined ? item.balance : calculateBalance(item.packagePrice || item.price, item.paidAmount)),
+      0
+    )
+
+    // ============================================================
+    // 1. TREATMENT PERFORMANCE ANALYTICS
+    // ============================================================
+    const treatmentStatsMap = {}
+    validRecords.forEach((item) => {
+      const tName = item.treatment || "Other / Consult"
+      const paid = Number(item.paidAmount || 0)
+      const sessions = Number(item.sessions || 1)
+
+      if (!treatmentStatsMap[tName]) {
+        treatmentStatsMap[tName] = { treatment: tName, sessions: 0, revenue: 0, bookings: 0 }
+      }
+      treatmentStatsMap[tName].sessions += sessions
+      treatmentStatsMap[tName].revenue += paid
+      treatmentStatsMap[tName].bookings += 1
+    })
+
+    const treatmentPerformance = Object.values(treatmentStatsMap)
+      .map((t) => ({
+        ...t,
+        percent: collected > 0 ? Math.round((t.revenue / collected) * 100) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+
+    // ============================================================
+    // 2. STAFF PERFORMANCE & SALES INCENTIVE (BASED ON PAID AMOUNT)
+    // ============================================================
+    const staffBookingMap = {}
+    const staffTherapyMap = {}
+    const rateDecimal = Number(incentiveRate || 5) / 100
+
+    validRecords.forEach((item) => {
+      const paid = Number(item.paidAmount || 0)
+      const bookedByName = item.bookedBy?.name || item.bookedBy?.userId || "Front Desk / Online"
+      const bookedById = item.bookedBy?.userId || "UNKNOWN"
+      const therapistId = item.therapist || ""
+      const therapistStaff = staff.find((s) => s.userId === therapistId)
+      const therapistName = therapistStaff ? therapistStaff.name : (therapistId || "Unassigned Specialist")
+
+      // A: Booked / Brought Customer
+      if (!staffBookingMap[bookedById]) {
+        staffBookingMap[bookedById] = {
+          name: bookedByName,
+          userId: bookedById,
+          role: staff.find((s) => s.userId === bookedById)?.role || "Staff / Admin",
+          bookingsCount: 0,
+          collectedRevenue: 0,
+          incentive: 0,
+        }
+      }
+      staffBookingMap[bookedById].bookingsCount += 1
+      staffBookingMap[bookedById].collectedRevenue += paid
+      staffBookingMap[bookedById].incentive = Math.round(staffBookingMap[bookedById].collectedRevenue * rateDecimal)
+
+      // B: Performed Treatment (Specialist — performance tracking only, no incentive)
+      if (therapistId) {
+        if (!staffTherapyMap[therapistId]) {
+          staffTherapyMap[therapistId] = {
+            name: therapistName,
+            userId: therapistId,
+            role: "Therapist / Specialist",
+            treatmentsCount: 0,
+            sessionsCount: 0,
+          }
+        }
+        staffTherapyMap[therapistId].treatmentsCount += 1
+        staffTherapyMap[therapistId].sessionsCount += Number(item.sessions || 1)
+      }
+    })
+
+    // Include all active clinic therapists so their working hours and activity are visible
+    staff
+      .filter((s) => s.role === "Therapist" && s.clinicId === clinicId && s.status === "Active")
+      .forEach((therapist) => {
+        if (!staffTherapyMap[therapist.userId]) {
+          staffTherapyMap[therapist.userId] = {
+            name: therapist.name,
+            userId: therapist.userId,
+            role: "Therapist / Specialist",
+            treatmentsCount: 0,
+            sessionsCount: 0,
+          }
+        }
+      })
+
+    // Helper: calculate total login/working hours for a therapist in the selected period
+    const getTherapistWorkingHours = (userId, r) => {
+      const pastLogs = (staffWorkLogs || []).filter(
+        (log) => log.userId === userId && log.date >= r.from && log.date <= r.to
+      )
+      let totalMs = pastLogs.reduce((sum, log) => sum + Number(log.durationMs || 0), 0)
+
+      const todayVal = todaySafe()
+      if (todayVal >= r.from && todayVal <= r.to) {
+        const activeEntry = (activeStaff || []).find((m) => m.userId === userId)
+        if (activeEntry && (activeEntry.loggedInAt || activeEntry.activeSince)) {
+          const startTime = Number(activeEntry.loggedInAt || activeEntry.activeSince)
+          totalMs += Math.max(0, Date.now() - startTime)
+        }
+      }
+
+      const totalMinutes = Math.round(totalMs / (1000 * 60))
+      if (totalMinutes < 1) return "0 hrs"
+      const hours = Math.floor(totalMinutes / 60)
+      const mins = totalMinutes % 60
+      if (hours === 0) return `${mins}m`
+      if (mins === 0) return `${hours} hrs`
+      return `${hours}h ${mins}m`
+    }
+
+    // Attach working hours to each therapist record
+    Object.keys(staffTherapyMap).forEach((tId) => {
+      staffTherapyMap[tId].workingHours = getTherapistWorkingHours(tId, range)
+    })
+
+    const staffBookingPerformance = Object.values(staffBookingMap).sort((a, b) => b.collectedRevenue - a.collectedRevenue)
+    const staffTherapyPerformance = Object.values(staffTherapyMap).sort((a, b) => b.treatmentsCount - a.treatmentsCount)
+
+    return {
+      records,
+      appointments: records.length,
+      completed,
+      cancelled,
+      noShow,
+      upcoming,
+      treatments: completed.length,
+      revenue,
+      collected,
+      outstanding,
+      treatmentPerformance,
+      staffBookingPerformance,
+      staffTherapyPerformance,
+    }
+  }
+
+  const formatCurrency = (val) => `Rs. ${Number(val || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
+  const dashboardData = getDashboardData()
+
+  // ============================================================
+  // FILTERED APPOINTMENTS & TOP SUMMARY STATS (Option 1 & 2)
+  // ============================================================
+
+  const dayAppointments = useMemo(() => {
+    return appointments
+      .map((apt, index) => ({ apt, index }))
+      .filter(({ apt }) => apt.appointmentDate === selectedDate)
+  }, [appointments, selectedDate])
+
+  const filteredDayAppointments = useMemo(() => {
+    return dayAppointments.filter(({ apt }) => {
+      const matchesSearch =
+        !searchQuery ||
+        (apt.customerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (apt.phoneNumber || "").includes(searchQuery) ||
+        (apt.receiptId || "").toLowerCase().includes(searchQuery.toLowerCase())
+
+      const matchesStatus =
+        statusFilter === "All" || apt.status === statusFilter
+
+      return matchesSearch && matchesStatus
+    })
+  }, [dayAppointments, searchQuery, statusFilter])
+
+  // Cumulative KPI Summary (Option 1 embedded into Option 2)
+  const kpiStats = useMemo(() => {
+    const total = dayAppointments.length
+    const active = dayAppointments.filter(({ apt }) => apt.status === "In Treatment" || apt.status === "Arrived").length
+    const done = dayAppointments.filter(({ apt }) => apt.status === "Completed").length
+    const collected = dayAppointments.reduce((sum, { apt }) => sum + Number(apt.paidAmount || 0), 0)
+    const revenue = dayAppointments.reduce((sum, { apt }) => sum + Number(apt.packagePrice || 0), 0)
+    return { total, active, done, collected, revenue }
+  }, [dayAppointments])
+
+  const selectedAppointment = useMemo(() => {
+    if (dayAppointments.length === 0) return null
+    if (selectedAppointmentIndex < dayAppointments.length) {
+      return dayAppointments[selectedAppointmentIndex]
+    }
+    return dayAppointments[0]
+  }, [dayAppointments, selectedAppointmentIndex])
+
+  // ============================================================
+  // UNAUTHENTICATED LOGIN SCREEN
   // ============================================================
 
   if (!isLoggedIn) {
     return (
-      <div>
-        <h1>{clinic.name}</h1>
-        <h2>Operator Login</h2>
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-icon">🏥</div>
+          <h1>{clinic.name}</h1>
+          <p>Clinic Portal & Booking System</p>
 
-        <input
-          type="text"
-          placeholder="User ID"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+            <div className="form-group" style={{ textAlign: "left" }}>
+              <label>User ID</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter username or ID"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoFocus
+              />
+            </div>
 
-        <br />
-        <br />
+            <div className="form-group" style={{ textAlign: "left" }}>
+              <label>Password</label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <br />
-        <br />
-
-        <button onClick={handleLogin}>Login</button>
+            <button type="submit" className="btn-primary-cta" style={{ width: "100%", justifyContent: "center", padding: "10px", marginTop: "10px" }}>
+              Sign In to Clinic
+            </button>
+          </form>
+        </div>
       </div>
     )
   }
 
   // ============================================================
-  // MAIN APPLICATION
+  // AUTHENTICATED APPLICATION
   // ============================================================
 
   return (
-    <div>
-      <h1>{clinic.name}</h1>
-      <h2>Appointment & Booking System</h2>
+    <div className="clinic-app">
+      {/* 1. TOP HEADER & BRANDING */}
+      <header className="clinic-header">
+        <div className="clinic-header-top">
+          <div className="clinic-brand">
+            <div className="clinic-logo-icon">S</div>
+            <div className="clinic-brand-text">
+              <h1>{clinic.name}</h1>
+              <span>{clinicId} • Aesthetic Clinic Management</span>
+            </div>
+          </div>
 
-      <p>
-        Logged in as: <strong>{currentUser?.name}</strong>
-        {" - "}
-        {currentUser?.role}
-      </p>
+          <div className="clinic-header-actions">
+            <button className="btn-primary-cta" onClick={openNewAppointmentForm}>
+              <span>+</span> New Appointment
+            </button>
 
-      <button onClick={handleLogout}>Logout</button>
+            <div className="user-badge">
+              <span>👤 {currentUser?.name}</span>
+              <span className="role-pill">{currentUser?.role}</span>
+            </div>
 
-      <hr />
+            <button className="btn-logout" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </div>
 
-      {/* ======================================================
-          NAVIGATION
-      ====================================================== */}
+        {/* NAVIGATION TABS */}
+        <nav className="clinic-nav-tabs">
+          {currentUser?.role === "Admin" && (
+            <button
+              className={`nav-tab-btn ${activeSection === "Dashboard" ? "active" : ""}`}
+              onClick={() => setActiveSection("Dashboard")}
+            >
+              📊 Dashboard
+            </button>
+          )}
 
-      <div>
-        <button onClick={() => setActiveSection("Appointments")}>
-          Appointments
-        </button>
-
-        <button onClick={() => setActiveSection("History")}>
-          History
-        </button>
-
-        <button onClick={() => setActiveSection("Staff")}>
-          Staff
-        </button>
-
-        <button onClick={() => setActiveSection("Treatments")}>
-          Treatments
-        </button>
-
-        <button onClick={() => setActiveSection("Rooms")}>
-          Rooms
-        </button>
-
-        {currentUser?.role === "Admin" && (
-          <button onClick={() => setActiveSection("Clinic")}>
-            Clinic
+          <button
+            className={`nav-tab-btn ${activeSection === "Appointments" ? "active" : ""}`}
+            onClick={() => setActiveSection("Appointments")}
+          >
+            📅 Appointments ({dayAppointments.length})
           </button>
-        )}
-      </div>
 
-      <hr />
-
-      {/* ======================================================
-          APPOINTMENTS
-      ====================================================== */}
-
-      {activeSection === "Appointments" && (
-        <div>
-          <h3>Appointments</h3>
-
-          <label>
-            Select Date:{" "}
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-          </label>
-
-          <br />
-          <br />
-
-          {appointments
-            .map((appointment, index) => ({
-              appointment,
-              index,
-            }))
-            .filter(
-              ({ appointment }) =>
-                appointment.appointmentDate === selectedDate
-            )
-            .map(({ appointment, index }) => (
-              <div key={appointment.appointmentId || index}>
-                <p>
-                  <strong>{appointment.customerName}</strong>
-                  {" - "}
-                  {appointment.treatment}
-                </p>
-
-                <p>Status: {appointment.status}</p>
-
-                <p>
-                  Receipt ID:{" "}
-                  <strong>{appointment.receiptId}</strong>
-                </p>
-
-                <p>
-                  {appointment.phoneNumber}
-                  {" - "}
-                  {appointment.appointmentDate}
-                  {" - "}
-                  {appointment.appointmentTime}
-                  {" - "}
-                  {appointment.endTime}
-                  {" - "}
-                  {appointment.duration} minutes
-                </p>
-
-                <p>
-                  Sessions:{" "}
-                  <strong>
-                    {appointment.sessions || 1}
-                  </strong>
-                </p>
-
-                <p>
-                  Package(s) Price:{" "}
-                  <strong>
-                    {Number(appointment.packagePrice || 0).toFixed(2)}
-                  </strong>
-                </p>
-
-                <p>
-                  Paid Amount:{" "}
-                  <strong>
-                    {Number(appointment.paidAmount || 0).toFixed(2)}
-                  </strong>
-                </p>
-
-                <p>
-                  Balance:{" "}
-                  <strong>
-                    {Number(appointment.balance || 0).toFixed(2)}
-                  </strong>
-                </p>
-
-                <p>
-                  Room:{" "}
-                  {rooms.find(
-                    (room) => room.roomId === appointment.room
-                  )?.name ||
-                    appointment.room ||
-                    "Not assigned"}
-                </p>
-
-                <p>
-                  Therapist:{" "}
-                  {staff.find(
-                    (member) => member.userId === appointment.therapist
-                  )?.name ||
-                    appointment.therapist ||
-                    "Not assigned"}
-                </p>
-
-                {appointment.bookedBy && (
-                  <p>
-                    Booked By:{" "}
-                    <strong>{appointment.bookedBy.name}</strong>
-                  </p>
-                )}
-
-                {appointment.rescheduledBy && (
-                  <p>
-                    Rescheduled By:{" "}
-                    <strong>{appointment.rescheduledBy.name}</strong>
-                  </p>
-                )}
-
-                {appointment.assignedBy && (
-                  <p>
-                    Assigned By:{" "}
-                    <strong>{appointment.assignedBy.name}</strong>
-                  </p>
-                )}
-
-                {/* ASSIGN TREATMENT */}
-
-                {appointment.status === "Arrived" && (
-                  <button
-                    onClick={() => {
-                      setAssigningAppointmentIndex(index)
-
-                      const availableRoom = rooms
-                        .filter(
-                          (room) =>
-                            room.clinicId === clinicId &&
-                            room.status === "Active"
-                        )
-                        .find((room) => {
-                          return !appointments.some(
-                            (otherAppointment, otherIndex) =>
-                              otherIndex !== index &&
-                              otherAppointment.room === room.roomId &&
-                              otherAppointment.status === "In Treatment"
-                          )
-                        })
-
-                      const availableTherapist = getAvailableTherapists()
-                        .sort((a, b) => {
-                          const aActive = activeStaff.find(
-                            (active) => active.userId === a.userId
-                          )
-                          const bActive = activeStaff.find(
-                            (active) => active.userId === b.userId
-                          )
-
-                          return (
-                            (aActive?.activeSince || Infinity) -
-                            (bActive?.activeSince || Infinity)
-                          )
-                        })[0]
-
-                      setAssignedRoom(
-                        availableRoom ? availableRoom.roomId : ""
-                      )
-                      setAssignedTherapist(
-                        availableTherapist
-                          ? availableTherapist.userId
-                          : ""
-                      )
-                    }}
-                  >
-                    Assign
-                  </button>
-                )}
-
-                {assigningAppointmentIndex === index && (
-                  <div>
-                    <h4>Assign Treatment</h4>
-
-                    <p>
-                      Customer:{" "}
-                      <strong>{appointment.customerName}</strong>
-                    </p>
-
-                    <p>
-                      Treatment:{" "}
-                      <strong>{appointment.treatment}</strong>
-                    </p>
-
-                    <label>
-                      Room:{" "}
-                      <select
-                        value={assignedRoom}
-                        onChange={(e) =>
-                          setAssignedRoom(e.target.value)
-                        }
-                      >
-                        <option value="">Select Room</option>
-
-                        {rooms
-                          .filter(
-                            (room) =>
-                              room.clinicId === clinicId &&
-                              room.status === "Active"
-                          )
-                          .map((room) => (
-                            <option
-                              key={room.roomId}
-                              value={room.roomId}
-                            >
-                              {room.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-
-                    <br />
-                    <br />
-
-                    <label>
-                      Therapist:{" "}
-                      <select
-                        value={assignedTherapist}
-                        onChange={(e) =>
-                          setAssignedTherapist(e.target.value)
-                        }
-                      >
-                        <option value="">Select Therapist</option>
-
-                        {getAvailableTherapists().map((therapist) => (
-                          <option
-                            key={therapist.userId}
-                            value={therapist.userId}
-                          >
-                            {therapist.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <br />
-                    <br />
-
-                    <button
-                      onClick={() => {
-                        if (!assignedRoom || !assignedTherapist) {
-                          alert(
-                            "Please select both Room and Therapist."
-                          )
-                          return
-                        }
-
-                        const roomBusy = appointments.some(
-                          (item, itemIndex) =>
-                            itemIndex !== index &&
-                            item.room === assignedRoom &&
-                            item.status === "In Treatment"
-                        )
-
-                        if (roomBusy) {
-                          alert("This room is already in use.")
-                          return
-                        }
-
-                        const therapistBusy = appointments.some(
-                          (item, itemIndex) =>
-                            itemIndex !== index &&
-                            item.therapist === assignedTherapist &&
-                            item.status === "In Treatment"
-                        )
-
-                        if (therapistBusy) {
-                          alert(
-                            "This therapist is already treating another customer."
-                          )
-                          return
-                        }
-
-                        const updatedAppointments = [...appointments]
-
-                        const updatedAppointment = {
-                          ...updatedAppointments[index],
-                          room: assignedRoom,
-                          therapist: assignedTherapist,
-                          status: "In Treatment",
-                          treatmentStartedAt: Date.now(),
-                          assignedBy: {
-                            clinicId,
-                            userId:
-                              currentUser?.userId || username,
-                            name:
-                              currentUser?.name || username,
-                          },
-                        }
-
-                        updatedAppointments[index] =
-                          updatedAppointment
-
-                        setAppointments(updatedAppointments)
-
-                        setTreatmentAssignments((current) => [
-                          ...current,
-                          {
-                            clinicId,
-                            appointmentId:
-                              updatedAppointment.appointmentId || "",
-                            receiptId:
-                              updatedAppointment.receiptId || "",
-                            room: assignedRoom,
-                            therapist: assignedTherapist,
-                            assignedBy: {
-                              userId:
-                                currentUser?.userId || username,
-                              name:
-                                currentUser?.name || username,
-                            },
-                            assignedAt: Date.now(),
-                          },
-                        ])
-
-                        logAppointmentActivity(
-                          updatedAppointment,
-                          "Assigned",
-                          {
-                            room: assignedRoom,
-                            therapist: assignedTherapist,
-                          }
-                        )
-
-                        setAssigningAppointmentIndex(null)
-                        setAssignedRoom("")
-                        setAssignedTherapist("")
-                      }}
-                    >
-                      Assign
-                    </button>{" "}
-
-                    <button
-                      onClick={() => {
-                        setAssigningAppointmentIndex(null)
-                        setAssignedRoom("")
-                        setAssignedTherapist("")
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-
-                {/* STATUS */}
-
-                <label>
-                  Status:{" "}
-                  <select
-                    value={appointment.status}
-                    onChange={(e) => {
-                      const newStatus = e.target.value
-
-                      if (
-                        newStatus === "Booked" ||
-                        newStatus === "Arrived" ||
-                        newStatus === "In Treatment"
-                      ) {
-                        const updatedAppointment = {
-                          ...appointment,
-                          status: newStatus,
-                        }
-
-                        const updatedAppointments = [...appointments]
-                        updatedAppointments[index] =
-                          updatedAppointment
-
-                        setAppointments(updatedAppointments)
-
-                        logAppointmentActivity(
-                          updatedAppointment,
-                          newStatus,
-                          {
-                            previousStatus: appointment.status,
-                            newStatus,
-                          }
-                        )
-                      } else {
-                        const historyRecord = {
-                          ...appointment,
-                          clinicId:
-                            appointment.clinicId || clinicId,
-                          status: newStatus,
-                          historyStatus: newStatus,
-                          historyAt: Date.now(),
-                        }
-
-                        logAppointmentActivity(
-                          appointment,
-                          newStatus,
-                          {
-                            previousStatus: appointment.status,
-                            newStatus,
-                          }
-                        )
-
-                        setAppointmentHistory((current) => [
-                          ...current,
-                          historyRecord,
-                        ])
-
-                        setAppointments((current) =>
-                          current.filter(
-                            (_, appointmentIndex) =>
-                              appointmentIndex !== index
-                          )
-                        )
-                      }
-                    }}
-                  >
-                    <option value="Booked">Booked</option>
-                    <option value="Arrived">Arrived</option>
-                    <option value="In Treatment">
-                      In Treatment
-                    </option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
-                    <option value="No Show">No Show</option>
-                  </select>
-                </label>
-
-                <br />
-                <br />
-
-                {/* RESCHEDULE */}
-
-                <button
-                  onClick={() =>
-                    openRescheduleForm(appointment, index)
-                  }
-                >
-                  Reschedule
-                </button>{" "}
-
-                {/* RECEIPT / WHATSAPP */}
-
-                <button
-                  onClick={() => {
-                    const message =
-                      `${clinic.name}\n\n` +
-                      `APPOINTMENT RECEIPT\n` +
-                      `=========================\n` +
-                      `Receipt ID: ${appointment.receiptId}\n\n` +
-                      `Customer: ${appointment.customerName}\n` +
-                      `Treatment: ${appointment.treatment}\n` +
-                      `Sessions: ${appointment.sessions || 1}\n` +
-                      `Date: ${appointment.appointmentDate}\n` +
-                      `Time: ${appointment.appointmentTime}\n` +
-                      `Duration: ${appointment.duration} minutes\n` +
-                      `Package(s) Price: ${Number(
-                        appointment.packagePrice || 0
-                      ).toFixed(2)}\n` +
-                      `Paid Amount: ${Number(
-                        appointment.paidAmount || 0
-                      ).toFixed(2)}\n` +
-                      `Balance: ${Number(
-                        appointment.balance || 0
-                      ).toFixed(2)}\n` +
-                      `------------------------------\n` +
-                      `Thank you for choosing\n` +
-                      `${clinic.name}\n\n` +
-                      `We look forward to seeing you!`
-
-                    let whatsappNumber =
-                      (appointment.phoneNumber || "").replace(
-                        /\D/g,
-                        ""
-                      )
-
-                    if (whatsappNumber.startsWith("03")) {
-                      whatsappNumber =
-                        "92" + whatsappNumber.substring(1)
-                    }
-
-                    const whatsappUrl =
-                      `https://wa.me/${whatsappNumber}` +
-                      `?text=${encodeURIComponent(message)}`
-
-                    window.open(whatsappUrl, "_blank")
-                  }}
-                >
-                  Send Receipt on WhatsApp
-                </button>{" "}
-
-                {/* DELETE */}
-
-                <button
-                  onClick={() => {
-                    const confirmed = window.confirm(
-                      "Are you sure you want to delete this appointment?"
-                    )
-
-                    if (!confirmed) {
-                      return
-                    }
-
-                    const deletedAppointment = appointments[index]
-
-                    setAppointmentHistory((current) => [
-                      ...current,
-                      {
-                        ...deletedAppointment,
-                        historyStatus: "Deleted",
-                        historyAt: Date.now(),
-                      },
-                    ])
-
-                    logAppointmentActivity(
-                      deletedAppointment,
-                      "Deleted",
-                      {}
-                    )
-
-                    setAppointments((current) =>
-                      current.filter(
-                        (_, appointmentIndex) =>
-                          appointmentIndex !== index
-                      )
-                    )
-                  }}
-                >
-                  Delete
-                </button>
-
-                <hr />
+          <button
+            className={`nav-tab-btn ${activeSection === "History" ? "active" : ""}`}
+            onClick={() => setActiveSection("History")}
+          >
+            📜 History ({appointmentHistory.length})
+          </button>
+
+          <button
+            className={`nav-tab-btn ${activeSection === "Staff" ? "active" : ""}`}
+            onClick={() => setActiveSection("Staff")}
+          >
+            👥 Staff ({staff.length})
+          </button>
+
+          <button
+            className={`nav-tab-btn ${activeSection === "Treatments" ? "active" : ""}`}
+            onClick={() => setActiveSection("Treatments")}
+          >
+            💉 Treatments ({treatments.length})
+          </button>
+
+          <button
+            className={`nav-tab-btn ${activeSection === "Rooms" ? "active" : ""}`}
+            onClick={() => setActiveSection("Rooms")}
+          >
+            🚪 Rooms ({rooms.length})
+          </button>
+
+          {currentUser?.role === "Admin" && (
+            <button
+              className={`nav-tab-btn ${activeSection === "Clinic" ? "active" : ""}`}
+              onClick={() => setActiveSection("Clinic")}
+            >
+              🏥 Clinic Settings
+            </button>
+          )}
+        </nav>
+      </header>
+
+      {/* 2. MAIN TAB CONTENT */}
+      <main className="clinic-main-content">
+        {/* ======================================================
+            APPOINTMENTS TAB (Option 2 Split-View + Option 1 Stats)
+        ====================================================== */}
+        {activeSection === "Appointments" && (
+          <div>
+            {/* DATE NAVIGATOR BAR - DEDICATED TO APPOINTMENTS TAB */}
+            <div className="date-navigator-bar" style={{ borderRadius: "10px", marginBottom: "16px", border: "1px solid var(--border)" }}>
+              <div className="date-controls">
+                <button className="btn-date-nav" onClick={() => handleShiftDate(-1)}>◀ Prev Day</button>
+                <button className="btn-date-nav" onClick={() => setSelectedDate(todaySafe())}>Today</button>
+                <button className="btn-date-nav" onClick={() => handleShiftDate(1)}>Next Day ▶</button>
+                <input
+                  type="date"
+                  className="date-picker-input"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
               </div>
-            ))}
 
-          <button onClick={openNewAppointmentForm}>
-            New Appointment
-          </button>
+              <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                Selected: <strong>{selectedDate}</strong> (Operating: {clinic.openingTime || "13:30"} - {clinic.closingTime || "21:00"})
+              </div>
+            </div>
 
-          {/* APPOINTMENT FORM */}
+            {/* TOP CUMULATIVE KPI SUMMARY BAR (OPTION 1 FEATURE) */}
+            <div className="kpi-summary-grid">
+              <div className="kpi-card">
+                <div className="kpi-icon-box" style={{ background: "#eff6ff", color: "#1d4ed8" }}>📅</div>
+                <div className="kpi-info-box">
+                  <div className="kpi-label">Total Bookings</div>
+                  <div className="kpi-value" style={{ color: "#1e3a8a" }}>{kpiStats.total}</div>
+                </div>
+              </div>
 
-          {showForm && (
-            <div>
-              <hr />
+              <div className="kpi-card">
+                <div className="kpi-icon-box" style={{ background: "#f3e8ff", color: "#7e22ce" }}>⚡</div>
+                <div className="kpi-info-box">
+                  <div className="kpi-label">Active Patients</div>
+                  <div className="kpi-value" style={{ color: "#581c87" }}>{kpiStats.active}</div>
+                </div>
+              </div>
 
-              <h3>
-                {editingIndex !== null
-                  ? "Reschedule Appointment"
-                  : "New Appointment"}
-              </h3>
+              <div className="kpi-card">
+                <div className="kpi-icon-box" style={{ background: "#dcfce7", color: "#15803d" }}>✅</div>
+                <div className="kpi-info-box">
+                  <div className="kpi-label">Completed</div>
+                  <div className="kpi-value" style={{ color: "#14532d" }}>{kpiStats.done}</div>
+                </div>
+              </div>
 
-              <input
-                type="text"
-                placeholder="Customer Name"
-                value={customerName}
-                onChange={(e) =>
-                  setCustomerName(e.target.value)
-                }
-              />
+              <div className="kpi-card">
+                <div className="kpi-icon-box" style={{ background: "#ecfdf5", color: "#047857" }}>💰</div>
+                <div className="kpi-info-box">
+                  <div className="kpi-label">Collected Today</div>
+                  <div className="kpi-value" style={{ color: "#064e3b" }}>{formatCurrency(kpiStats.collected)}</div>
+                </div>
+              </div>
+            </div>
 
-              <br />
-              <br />
+            {/* SPLIT PANE CONTAINER (OPTION 2 FEATURE) */}
+            <div className="split-pane-layout">
+              {/* LEFT SIDE: SEARCH & TABLE (65%) */}
+              <div className="table-panel-card">
+                <div className="table-toolbar">
+                  <input
+                    type="text"
+                    className="table-search-input"
+                    placeholder="🔍 Search patient, phone, receipt..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
 
-              <input
-                type="text"
-                placeholder="Phone Number"
-                value={phoneNumber}
-                onChange={(e) =>
-                  setPhoneNumber(e.target.value)
-                }
-              />
+                  <div className="status-filter-pills">
+                    {["All", "Booked", "Arrived", "In Treatment", "Completed"].map((st) => (
+                      <button
+                        key={st}
+                        className={`filter-pill-btn ${statusFilter === st ? "active" : ""}`}
+                        onClick={() => setStatusFilter(st)}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-              <br />
-              <br />
-
-              <input
-                type="date"
-                value={appointmentDate}
-                onChange={(e) => {
-                  const newDate = e.target.value
-                  setAppointmentDate(newDate)
-
-                  setAppointmentTime(
-                    findFirstAvailableTime(
-                      newDate,
-                      getTreatmentDuration(treatment) || 30
-                    )
-                  )
-                }}
-              />
-
-              <br />
-              <br />
-
-              <select
-                value={treatment}
-                onChange={(e) => {
-                  const newTreatment = e.target.value
-                  setTreatment(newTreatment)
-
-                  const duration =
-                    getTreatmentDuration(newTreatment)
-
-                  const sessions =
-                    getTreatmentSessions(newTreatment)
-
-                  const price =
-                    getTreatmentPrice(newTreatment)
-
-                  setAppointmentSessions(sessions)
-                  setAppointmentPrice(price)
-
-                  if (appointmentDate && duration) {
-                    setAppointmentTime(
-                      findFirstAvailableTime(
-                        appointmentDate,
-                        duration
-                      )
-                    )
-                  }
-                }}
-              >
-                <option value="">Select Treatment</option>
-
-                {treatments
-                  .filter(
-                    (item) =>
-                      item.clinicId === clinicId &&
-                      item.status === "Active"
-                  )
-                  .map((item) => (
-                    <option
-                      key={item.treatmentId}
-                      value={item.name}
-                    >
-                      {item.name}
-                    </option>
-                  ))}
-              </select>
-
-              <br />
-              <br />
-
-              {/* SESSIONS */}
-
-              <label>
-                Sessions:{" "}
-                <select
-                  value={appointmentSessions}
-                  onChange={(e) =>
-                    setAppointmentSessions(
-                      Number(e.target.value)
-                    )
-                  }
-                >
-                  {Array.from(
-                    {
-                      length: Math.max(
-                        1,
-                        getTreatmentSessions(treatment)
-                      ),
-                    },
-                    (_, index) => index + 1
-                  ).map((sessionNumber) => (
-                    <option
-                      key={sessionNumber}
-                      value={sessionNumber}
-                    >
-                      {sessionNumber}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <br />
-              <br />
-
-              <label>
-                Package(s) Price:{" "}
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={appointmentPrice}
-                  onChange={(e) =>
-                    setAppointmentPrice(
-                      Number(e.target.value)
-                    )
-                  }
-                />
-              </label>
-
-              <br />
-              <br />
-
-              <label>
-                Paid Amount:{" "}
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={paidAmount}
-                  onChange={(e) =>
-                    setPaidAmount(
-                      Number(e.target.value)
-                    )
-                  }
-                />
-              </label>
-
-              <br />
-              <br />
-
-              <p>
-                Balance:{" "}
-                <strong>
-                  {calculateBalance(
-                    appointmentPrice,
-                    paidAmount
-                  ).toFixed(2)}
-                </strong>
-              </p>
-
-              <input
-                type="time"
-                value={appointmentTime}
-                onChange={(e) =>
-                  setAppointmentTime(e.target.value)
-                }
-              />
-
-              <br />
-              <br />
-
-              <button
-                onClick={() => {
-                  const duration =
-                    getTreatmentDuration(treatment)
-
-                  if (
-                    !customerName ||
-                    !phoneNumber ||
-                    !appointmentDate ||
-                    !appointmentTime ||
-                    !treatment
-                  ) {
-                    alert(
-                      "Please complete all appointment details."
-                    )
-                    return
-                  }
-
-                  if (!duration) {
-                    alert(
-                      "Please select a valid treatment."
-                    )
-                    return
-                  }
-
-                  if (!appointmentSessions || appointmentSessions < 1) {
-                    alert("Please select the number of sessions.")
-                    return
-                  }
-
-                  const phoneIsValid =
-                    /^03\d+$/.test(phoneNumber) ||
-                    /^\+\d+$/.test(phoneNumber)
-
-                  if (!phoneIsValid) {
-                    alert(
-                      "Please enter a valid phone number."
-                    )
-                    return
-                  }
-
-                  const numericPrice = Number(
-                    appointmentPrice || 0
-                  )
-                  const numericPaid = Number(
-                    paidAmount || 0
-                  )
-
-                  if (numericPrice < 0 || numericPaid < 0) {
-                    alert("Price and paid amount cannot be negative.")
-                    return
-                  }
-
-                  const endTime = calculateEndTime(
-                    appointmentTime,
-                    duration
-                  )
-
-                  if (!endTime) {
-                    alert(
-                      "Unable to calculate appointment end time."
-                    )
-                    return
-                  }
-
-                  const newStart = new Date(
-                    `${appointmentDate}T${appointmentTime}:00`
-                  )
-
-                  const newEnd = new Date(
-                    `${appointmentDate}T${endTime}:00`
-                  )
-
-                  const availableRoom = rooms
-                    .filter(
-                      (room) =>
-                        room.clinicId === clinicId &&
-                        room.status === "Active"
-                    )
-                    .find((room) => {
-                      return !appointments.some(
-                        (
-                          existingAppointment,
-                          existingIndex
-                        ) => {
-                          if (
-                            editingIndex !== null &&
-                            existingIndex === editingIndex
-                          ) {
-                            return false
-                          }
-
-                          if (
-                            existingAppointment.room !== room.roomId ||
-                            existingAppointment.appointmentDate !==
-                              appointmentDate
-                          ) {
-                            return false
-                          }
-
-                          if (
-                            existingAppointment.status ===
-                              "Cancelled" ||
-                            existingAppointment.status ===
-                              "No Show"
-                          ) {
-                            return false
-                          }
-
-                          if (
-                            !existingAppointment.appointmentTime ||
-                            !existingAppointment.endTime
-                          ) {
-                            return false
-                          }
-
-                          const existingStart = new Date(
-                            `${existingAppointment.appointmentDate}T${existingAppointment.appointmentTime}:00`
-                          )
-
-                          const existingEnd = new Date(
-                            `${existingAppointment.appointmentDate}T${existingAppointment.endTime}:00`
-                          )
+                {/* 1. DESKTOP DATA TABLE (Visible on Desktop & Laptop) */}
+                <div className="data-table-container desktop-table-view">
+                  {filteredDayAppointments.length === 0 ? (
+                    <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
+                      <p style={{ fontSize: "16px", fontWeight: 600 }}>No appointments found for {selectedDate}</p>
+                      <p style={{ fontSize: "13px", marginTop: "6px" }}>Click "+ New Appointment" to schedule a patient booking.</p>
+                    </div>
+                  ) : (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Customer</th>
+                          <th>Treatment</th>
+                          <th>Room & Therapist</th>
+                          <th>Status</th>
+                          <th>Total / Due</th>
+                          <th style={{ textAlign: "right" }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDayAppointments.map(({ apt, index }) => {
+                          const isSelected = selectedAppointment?.index === index
+                          const roomObj = rooms.find((r) => r.roomId === apt.room)
+                          const staffObj = staff.find((s) => s.userId === apt.therapist)
 
                           return (
-                            existingStart < newEnd &&
-                            existingEnd > newStart
+                            <tr
+                              key={apt.appointmentId || index}
+                              className={isSelected ? "selected" : ""}
+                              onClick={() => setSelectedAppointmentIndex(index)}
+                            >
+                              <td style={{ fontWeight: 600 }}>
+                                {apt.appointmentTime}
+                                <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}>
+                                  {apt.endTime} ({apt.duration}m)
+                                </div>
+                              </td>
+
+                              <td>
+                                <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{apt.customerName}</div>
+                                <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{apt.phoneNumber}</div>
+                              </td>
+
+                              <td>
+                                <span className="badge-pill" style={{ background: "#f1f5f9", color: "#334155" }}>
+                                  💉 {apt.treatment}
+                                </span>
+                              </td>
+
+                              <td>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                  <span className="badge-pill badge-room">
+                                    🚪 {roomObj?.name || apt.room || "No Room"}
+                                  </span>
+                                  {apt.therapist && (
+                                    <span className="badge-pill badge-therapist">
+                                      👤 {staffObj?.name || apt.therapist}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td>
+                                <span className={`badge-pill badge-status-${(apt.status || "booked").toLowerCase().replace(" ", "")}`}>
+                                  {apt.status}
+                                </span>
+                              </td>
+
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{formatCurrency(apt.packagePrice)}</div>
+                                {Number(apt.balance) > 0 && (
+                                  <div style={{ fontSize: "11px", color: "#dc2626", fontWeight: 600 }}>
+                                    Due: {formatCurrency(apt.balance)}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                                <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                                  <button
+                                    title="WhatsApp Receipt"
+                                    onClick={() => handleWhatsAppRedirect(apt)}
+                                    style={{
+                                      background: "#dcfce7",
+                                      color: "#15803d",
+                                      border: "1px solid #bbf7d0",
+                                      padding: "4px 8px",
+                                      borderRadius: "4px",
+                                      cursor: "pointer",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    💬
+                                  </button>
+                                  <button
+                                    title="Delete"
+                                    onClick={() => handleDeleteAppointment(index)}
+                                    style={{
+                                      background: "#fee2e2",
+                                      color: "#dc2626",
+                                      border: "1px solid #fecaca",
+                                      padding: "4px 8px",
+                                      borderRadius: "4px",
+                                      cursor: "pointer",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
                           )
-                        }
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* 2. MOBILE APPOINTMENT CARDS (Visible on Phones & Tablets) */}
+                <div className="mobile-cards-view">
+                  {filteredDayAppointments.length === 0 ? (
+                    <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--text-muted)" }}>
+                      <p style={{ fontSize: "15px", fontWeight: 600 }}>No appointments found for {selectedDate}</p>
+                      <p style={{ fontSize: "12px", marginTop: "4px" }}>Tap "+ New Appointment" to book a patient.</p>
+                    </div>
+                  ) : (
+                    filteredDayAppointments.map(({ apt, index }) => {
+                      const roomObj = rooms.find((r) => r.roomId === apt.room)
+                      const staffObj = staff.find((s) => s.userId === apt.therapist)
+
+                      return (
+                        <div key={apt.appointmentId || index} className="mobile-appointment-card">
+                          <div className="mobile-card-top">
+                            <div className="mobile-card-patient">
+                              <div className="mobile-patient-avatar">
+                                {(apt.customerName || "P").charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="mobile-patient-name">{apt.customerName}</div>
+                                <div className="mobile-patient-phone">📞 {apt.phoneNumber}</div>
+                              </div>
+                            </div>
+                            <span className={`badge-pill badge-status-${(apt.status || "booked").toLowerCase().replace(" ", "")}`}>
+                              {apt.status}
+                            </span>
+                          </div>
+
+                          <div className="mobile-card-meta">
+                            <span>⏱️ <strong>{apt.appointmentTime}</strong> - {apt.endTime} ({apt.duration}m)</span>
+                            <span>💉 <strong>{apt.treatment}</strong></span>
+                            {roomObj && <span>🚪 {roomObj.name}</span>}
+                            {staffObj && <span>👤 {staffObj.name}</span>}
+                          </div>
+
+                          <div className="mobile-card-financial">
+                            <span>Total: <strong>{formatCurrency(apt.packagePrice)}</strong></span>
+                            <span style={{ color: "#16a34a" }}>Paid: <strong>{formatCurrency(apt.paidAmount)}</strong></span>
+                            {Number(apt.balance) > 0 ? (
+                              <span style={{ color: "#dc2626" }}>Due: <strong>{formatCurrency(apt.balance)}</strong></span>
+                            ) : (
+                              <span style={{ color: "#16a34a" }}>Paid in Full</span>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", minWidth: "42px" }}>Status:</label>
+                            <select
+                              className="form-control"
+                              style={{ padding: "4px 8px", fontSize: "12px", height: "30px", fontWeight: 600 }}
+                              value={apt.status}
+                              onChange={(e) => handleStatusChange(index, e.target.value)}
+                            >
+                              <option value="Booked">Booked</option>
+                              <option value="Arrived">Arrived</option>
+                              <option value="In Treatment">In Treatment</option>
+                              <option value="Completed">Completed</option>
+                              <option value="Cancelled">Cancelled</option>
+                              <option value="No Show">No Show</option>
+                            </select>
+                          </div>
+
+                          <div className="mobile-card-actions">
+                            <button
+                              className="mobile-btn-action"
+                              style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}
+                              onClick={() => handleWhatsAppRedirect(apt)}
+                            >
+                              💬 WhatsApp
+                            </button>
+
+                            {apt.status === "Arrived" && (
+                              <button
+                                className="mobile-btn-action"
+                                style={{ background: "#e0f2fe", color: "#0284c7", border: "1px solid #bae6fd" }}
+                                onClick={() => {
+                                  setAssigningAppointmentIndex(index)
+                                  const firstFreeRoom = rooms.find((r) => r.status === "Active")
+                                  const firstFreeTherapist = getAvailableTherapists()[0]
+                                  setAssignedRoom(firstFreeRoom?.roomId || "")
+                                  setAssignedTherapist(firstFreeTherapist?.userId || "")
+                                  setShowAssignModal(true)
+                                }}
+                              >
+                                ⚡ Assign
+                              </button>
+                            )}
+
+                            <button
+                              className="mobile-btn-action"
+                              style={{ background: "#f1f5f9", color: "var(--text-main)", border: "1px solid var(--border)" }}
+                              onClick={() => openRescheduleForm(apt, index)}
+                            >
+                              🕒 Reschedule
+                            </button>
+
+                            <button
+                              className="mobile-btn-action"
+                              style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", maxWidth: "45px", minWidth: "36px" }}
+                              onClick={() => handleDeleteAppointment(index)}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
                       )
                     })
-
-                  if (!availableRoom) {
-                    alert(
-                      "All active treatment rooms are occupied at this time."
-                    )
-                    return
-                  }
-
-                  // RESCHEDULE:
-                  // Update the SAME appointment record.
-                  // The activity is stored separately and internally.
-
-                  if (editingIndex !== null) {
-                    const oldAppointment =
-                      appointments[editingIndex]
-
-                    logAppointmentActivity(
-                      oldAppointment,
-                      "Rescheduled",
-                      {
-                        oldDate:
-                          oldAppointment.appointmentDate,
-                        oldTime:
-                          oldAppointment.appointmentTime,
-                        oldEndTime:
-                          oldAppointment.endTime,
-                        newDate:
-                          appointmentDate,
-                        newTime:
-                          appointmentTime,
-                        newEndTime:
-                          endTime,
-                        oldRoom:
-                          oldAppointment.room,
-                        newRoom:
-                          availableRoom.roomId,
-                      }
-                    )
-
-                    const updatedAppointments = [
-                      ...appointments,
-                    ]
-
-                    updatedAppointments[editingIndex] = {
-                      ...oldAppointment,
-                      customerName,
-                      phoneNumber,
-                      treatment,
-                      duration,
-                      sessions: Number(
-                        appointmentSessions
-                      ),
-                      appointmentDate,
-                      appointmentTime,
-                      endTime,
-                      room:
-                        availableRoom.roomId,
-                      packagePrice:
-                        numericPrice,
-                      paidAmount:
-                        numericPaid,
-                      balance:
-                        calculateBalance(
-                          numericPrice,
-                          numericPaid
-                        ),
-                      status: "Booked",
-                      rescheduledBy: {
-                        clinicId,
-                        userId:
-                          currentUser?.userId ||
-                          username,
-                        name:
-                          currentUser?.name ||
-                          username,
-                      },
-                      rescheduledAt: Date.now(),
-                    }
-
-                    setAppointments(
-                      updatedAppointments
-                    )
-                  } else {
-                    // NEW APPOINTMENT
-
-                    const receiptId =
-                      clinicId +
-                      currentYear +
-                      String(
-                        nextReceiptNumber
-                      ).padStart(3, "0")
-
-                    const newAppointment = {
-                      clinicId,
-                      appointmentId:
-                        `APT${Date.now()}${Math.floor(
-                          Math.random() * 1000
-                        )}`,
-                      receiptId,
-                      customerName,
-                      phoneNumber,
-                      treatment,
-                      duration,
-                      sessions:
-                        Number(appointmentSessions),
-                      appointmentDate,
-                      appointmentTime,
-                      endTime,
-                      room:
-                        availableRoom.roomId,
-                      status: "Booked",
-                      packagePrice:
-                        numericPrice,
-                      paidAmount:
-                        numericPaid,
-                      balance:
-                        calculateBalance(
-                          numericPrice,
-                          numericPaid
-                        ),
-                      bookedBy: {
-                        clinicId,
-                        userId:
-                          currentUser?.userId ||
-                          username,
-                        name:
-                          currentUser?.name ||
-                          username,
-                      },
-                      bookedAt: Date.now(),
-                    }
-
-                    setAppointments((current) => [
-                      ...current,
-                      newAppointment,
-                    ])
-
-                    logAppointmentActivity(
-                      newAppointment,
-                      "Booked",
-                      {
-                        date: appointmentDate,
-                        time: appointmentTime,
-                        treatment,
-                        duration,
-                        sessions:
-                          Number(
-                            appointmentSessions
-                          ),
-                        packagePrice:
-                          numericPrice,
-                        paidAmount:
-                          numericPaid,
-                        balance:
-                          calculateBalance(
-                            numericPrice,
-                            numericPaid
-                          ),
-                        room:
-                          availableRoom.roomId,
-                      }
-                    )
-
-                    setNextReceiptNumber(
-                      (current) => current + 1
-                    )
-                  }
-
-                  resetAppointmentForm()
-                }}
-              >
-                {editingIndex !== null
-                  ? "Save Rescheduled Appointment"
-                  : "Save Appointment"}
-              </button>{" "}
-
-              <button onClick={resetAppointmentForm}>
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ======================================================
-          HISTORY
-      ====================================================== */}
-
-      {activeSection === "History" && (
-        <div>
-          <h3>Appointment History</h3>
-
-          {appointmentHistory.length === 0 ? (
-            <p>No appointment history yet.</p>
-          ) : (
-            appointmentHistory
-              .slice()
-              .reverse()
-              .map((appointment, historyIndex) => (
-                <div
-                  key={
-                    appointment.appointmentId ||
-                    `${appointment.receiptId}-${historyIndex}`
-                  }
-                >
-                  <strong>
-                    {appointment.customerName}
-                    {" - "}
-                    {appointment.treatment}
-                  </strong>
-
-                  <p>
-                    Receipt ID:{" "}
-                    <strong>
-                      {appointment.receiptId}
-                    </strong>
-                  </p>
-
-                  <p>
-                    {appointment.appointmentDate}
-                    {" - "}
-                    {appointment.appointmentTime}
-                    {" - "}
-                    {appointment.duration} minutes
-                  </p>
-
-                  <p>
-                    Sessions:{" "}
-                    {appointment.sessions || 1}
-                  </p>
-
-                  <p>
-                    Package(s) Price:{" "}
-                    {Number(
-                      appointment.packagePrice || 0
-                    ).toFixed(2)}
-                  </p>
-
-                  <p>
-                    Paid Amount:{" "}
-                    {Number(
-                      appointment.paidAmount || 0
-                    ).toFixed(2)}
-                  </p>
-
-                  <p>
-                    Balance:{" "}
-                    {Number(
-                      appointment.balance || 0
-                    ).toFixed(2)}
-                  </p>
-
-                  <p>
-                    History Status:{" "}
-                    {appointment.historyStatus}
-                  </p>
-
-                  <hr />
+                  )}
                 </div>
-              ))
-          )}
-        </div>
-      )}
+              </div>
 
-      {/* ======================================================
-          STAFF
-      ====================================================== */}
+              {/* RIGHT SIDE: PATIENT INSPECTOR PANEL (Desktop Only) */}
+              <div className="inspector-panel desktop-inspector">
+                {selectedAppointment ? (
+                  <div>
+                    <div className="inspector-header">
+                      <div className="patient-avatar">
+                        {(selectedAppointment.apt.customerName || "P").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="patient-info">
+                        <h3>{selectedAppointment.apt.customerName}</h3>
+                        <span>📞 {selectedAppointment.apt.phoneNumber}</span>
+                        <div style={{ fontSize: "11px", color: "var(--primary)", fontWeight: 600, marginTop: "2px" }}>
+                          ID: {selectedAppointment.apt.receiptId}
+                        </div>
+                      </div>
+                    </div>
 
-      {activeSection === "Staff" &&
-        currentUser?.role === "Admin" && (
-          <div>
-            <h3>Staff Management</h3>
+                    <div className="inspector-section">
+                      <div className="inspector-row">
+                        <span className="label">Treatment</span>
+                        <span className="val">{selectedAppointment.apt.treatment}</span>
+                      </div>
+                      <div className="inspector-row">
+                        <span className="label">Schedule</span>
+                        <span className="val">{selectedAppointment.apt.appointmentTime} - {selectedAppointment.apt.endTime}</span>
+                      </div>
+                      <div className="inspector-row">
+                        <span className="label">Duration</span>
+                        <span className="val">{selectedAppointment.apt.duration} mins ({selectedAppointment.apt.sessions || 1} Session)</span>
+                      </div>
+                    </div>
 
-            {staff.filter(
-              (member) => member.clinicId === clinicId
-            ).length === 0 ? (
-              <p>No staff added yet.</p>
-            ) : (
-              staff
-                .filter(
-                  (member) => member.clinicId === clinicId
-                )
-                .map((member) => (
-                  <div key={member.userId}>
-                    <strong>{member.name}</strong>
+                    <div className="inspector-section">
+                      <div className="inspector-row">
+                        <span className="label">Room</span>
+                        <span className="val">
+                          {rooms.find((r) => r.roomId === selectedAppointment.apt.room)?.name || "Unassigned"}
+                        </span>
+                      </div>
+                      <div className="inspector-row">
+                        <span className="label">Therapist</span>
+                        <span className="val">
+                          {staff.find((s) => s.userId === selectedAppointment.apt.therapist)?.name || "Unassigned"}
+                        </span>
+                      </div>
+                      {selectedAppointment.apt.status === "Arrived" && (
+                        <button
+                          className="btn-primary-cta"
+                          style={{ width: "100%", justifyContent: "center", padding: "6px", marginTop: "6px", fontSize: "12px" }}
+                          onClick={() => {
+                            setAssigningAppointmentIndex(selectedAppointment.index)
+                            const firstFreeRoom = rooms.find((r) => r.status === "Active")
+                            const firstFreeTherapist = getAvailableTherapists()[0]
+                            setAssignedRoom(firstFreeRoom?.roomId || "")
+                            setAssignedTherapist(firstFreeTherapist?.userId || "")
+                            setShowAssignModal(true)
+                          }}
+                        >
+                          ⚡ Assign Room & Specialist
+                        </button>
+                      )}
+                    </div>
 
-                    <p>
-                      User ID: {member.userId}
-                    </p>
+                    <div className="inspector-section">
+                      <div className="inspector-row">
+                        <span className="label">Total Price</span>
+                        <span className="val">{formatCurrency(selectedAppointment.apt.packagePrice)}</span>
+                      </div>
+                      <div className="inspector-row">
+                        <span className="label">Paid Amount</span>
+                        <span className="val" style={{ color: "#16a34a" }}>{formatCurrency(selectedAppointment.apt.paidAmount)}</span>
+                      </div>
+                      <div className="inspector-row">
+                        <span className="label">Remaining Due</span>
+                        <span className="val" style={{ color: Number(selectedAppointment.apt.balance) > 0 ? "#dc2626" : "#16a34a" }}>
+                          {formatCurrency(selectedAppointment.apt.balance)}
+                        </span>
+                      </div>
+                    </div>
 
-                    <p>
-                      Role: {member.role}
-                    </p>
+                    {/* STATUS CHANGER */}
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                        Update Status
+                      </label>
+                      <select
+                        className="form-control"
+                        value={selectedAppointment.apt.status}
+                        onChange={(e) => handleStatusChange(selectedAppointment.index, e.target.value)}
+                        style={{ fontWeight: 600 }}
+                      >
+                        <option value="Booked">Booked</option>
+                        <option value="Arrived">Arrived</option>
+                        <option value="In Treatment">In Treatment</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="No Show">No Show</option>
+                      </select>
+                    </div>
 
-                    <p>
-                      Status: {member.status}
-                    </p>
-
+                    {/* WHATSAPP CTA */}
                     <button
-                      onClick={() => {
-                        setEditingStaffIndex(
-                          staff.findIndex(
-                            (item) =>
-                              item.userId ===
-                              member.userId
-                          )
-                        )
-                        setStaffName(member.name)
-                        setStaffPassword(member.password)
-                        setStaffRole(member.role)
-                        setStaffStatus(
-                          member.status || "Active"
-                        )
-                        setShowStaffForm(true)
-                      }}
+                      className="btn-whatsapp-cta"
+                      onClick={() => handleWhatsAppRedirect(selectedAppointment.apt)}
                     >
-                      Edit Staff
+                      💬 Send WhatsApp Receipt
                     </button>
 
-                    <hr />
+                    <div className="inspector-action-buttons">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => openRescheduleForm(selectedAppointment.apt, selectedAppointment.index)}
+                      >
+                        🕒 Reschedule
+                      </button>
+                      <button
+                        className="btn-danger"
+                        onClick={() => handleDeleteAppointment(selectedAppointment.index)}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
-                ))
-            )}
+                ) : (
+                  <div style={{ padding: "40px 10px", textAlign: "center", color: "var(--text-muted)" }}>
+                    <p style={{ fontSize: "14px" }}>Select an appointment from the table to view patient details & actions.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
-            <button
-              onClick={() => {
-                resetStaffForm()
-                setShowStaffForm(true)
-              }}
-            >
-              Add Staff
-            </button>
+        {/* ======================================================
+            DASHBOARD TAB (MANAGEMENT DASHBOARD + ANALYTICS)
+        ====================================================== */}
+        {activeSection === "Dashboard" && currentUser?.role === "Admin" && (
+          <div>
+            <div className="content-card">
+              {/* DASHBOARD HEADER & PERIOD SHIFTER */}
+              <div className="content-header">
+                <div>
+                  <h2>Executive Management Dashboard</h2>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                    Reporting Window: <strong>{getDashboardRange().from}</strong> → <strong>{getDashboardRange().to}</strong>
+                  </span>
+                </div>
 
-            {showStaffForm && (
-              <div>
-                <h4>
-                  {editingStaffIndex !== null
-                    ? "Edit Staff"
-                    : "Add Staff"}
-                </h4>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button className="btn-date-nav" onClick={() => handleDashboardShift(-1)}>◀ Prev</button>
+                  <button className="btn-date-nav" onClick={() => setDashboardPeriod("Today")}>Today</button>
+                  <button className="btn-date-nav" onClick={() => handleDashboardShift(1)}>Next ▶</button>
 
-                <input
-                  type="text"
-                  placeholder="Staff Name"
-                  value={staffName}
-                  onChange={(e) =>
-                    setStaffName(e.target.value)
-                  }
-                />
+                  <select
+                    className="form-control"
+                    style={{ width: "auto", fontWeight: 600 }}
+                    value={dashboardPeriod}
+                    onChange={(e) => {
+                      setDashboardPeriod(e.target.value)
+                      setDashboardDrilldown(null)
+                    }}
+                  >
+                    <option>Today</option>
+                    <option>Yesterday</option>
+                    <option>This Week</option>
+                    <option>This Month</option>
+                    <option>Last Month</option>
+                    <option>Custom Date Range</option>
+                  </select>
+                </div>
+              </div>
 
-                <br />
-                <br />
+              {dashboardPeriod === "Custom Date Range" && (
+                <div style={{ display: "flex", gap: "10px", marginBottom: "16px", background: "#f8fafc", padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                  <label style={{ fontSize: "13px", fontWeight: 600 }}>
+                    From: <input type="date" className="form-control" value={dashboardFromDate} onChange={(e) => setDashboardFromDate(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: "13px", fontWeight: 600 }}>
+                    To: <input type="date" className="form-control" value={dashboardToDate} onChange={(e) => setDashboardToDate(e.target.value)} />
+                  </label>
+                </div>
+              )}
 
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={staffPassword}
-                  onChange={(e) =>
-                    setStaffPassword(e.target.value)
-                  }
-                />
+              {/* ACTIVITY METRICS CARDS */}
+              <h3 style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "var(--text-muted)", letterSpacing: "0.5px" }}>
+                ACTIVITY & OPERATIONS
+              </h3>
+              <div className="kpi-summary-grid" style={{ marginBottom: "24px" }}>
+                {[
+                  { label: "Appointments", val: dashboardData.appointments, records: dashboardData.records, bg: "#eff6ff", border: "#bfdbfe", color: "#1e3a8a" },
+                  { label: "Completed", val: dashboardData.completed.length, records: dashboardData.completed, bg: "#f0fdf4", border: "#bbf7d0", color: "#14532d" },
+                  { label: "Upcoming", val: dashboardData.upcoming.length, records: dashboardData.upcoming, bg: "#faf5ff", border: "#e9d5ff", color: "#581c87" },
+                  { label: "Cancelled", val: dashboardData.cancelled.length, records: dashboardData.cancelled, bg: "#fef2f2", border: "#fecaca", color: "#7f1d1d" },
+                  { label: "No Show", val: dashboardData.noShow.length, records: dashboardData.noShow, bg: "#fffbeb", border: "#fde68a", color: "#78350f" },
+                  { label: "Treatments", val: dashboardData.treatments, records: dashboardData.completed, bg: "#f0fdfa", border: "#99f6e4", color: "#134e4a" },
+                ].map((c) => (
+                  <button
+                    key={c.label}
+                    onClick={() => setDashboardDrilldown({ title: c.label, records: c.records })}
+                    style={{
+                      background: c.bg,
+                      border: `1.5px solid ${c.border}`,
+                      borderRadius: "10px",
+                      padding: "14px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      boxShadow: "var(--shadow-sm)",
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: c.color }}>{c.label}</div>
+                    <div style={{ fontSize: "24px", fontWeight: 700, color: c.color, marginTop: "4px" }}>{c.val}</div>
+                  </button>
+                ))}
+              </div>
 
-                <br />
-                <br />
+              {/* FINANCIAL SUMMARY CARDS */}
+              <h3 style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "var(--text-muted)", letterSpacing: "0.5px" }}>
+                FINANCIAL PERFORMANCE
+              </h3>
+              <div className="kpi-summary-grid">
+                {[
+                  { label: "Revenue (Booked Value)", val: formatCurrency(dashboardData.revenue), records: dashboardData.records.filter((a) => a.status !== "Cancelled" && a.status !== "No Show"), bg: "#ecfdf5", border: "#6ee7b7", color: "#064e3b" },
+                  { label: "Collected Cash / Paid", val: formatCurrency(dashboardData.collected), records: dashboardData.records.filter((a) => Number(a.paidAmount) > 0), bg: "#eff6ff", border: "#93c5fd", color: "#172554" },
+                  { label: "Outstanding Receivables", val: formatCurrency(dashboardData.outstanding), records: dashboardData.records.filter((a) => Number(a.balance) > 0), bg: "#fff1f2", border: "#fecdd3", color: "#881337" },
+                ].map((c) => (
+                  <button
+                    key={c.label}
+                    onClick={() => setDashboardDrilldown({ title: c.label, records: c.records })}
+                    style={{
+                      background: c.bg,
+                      border: `1.5px solid ${c.border}`,
+                      borderRadius: "10px",
+                      padding: "14px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      boxShadow: "var(--shadow-sm)",
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: c.color }}>{c.label}</div>
+                    <div style={{ fontSize: "22px", fontWeight: 700, color: c.color, marginTop: "4px" }}>{c.val}</div>
+                  </button>
+                ))}
+              </div>
 
-                <select
-                  value={staffRole}
-                  onChange={(e) =>
-                    setStaffRole(e.target.value)
-                  }
-                >
-                  <option value="Operator">
-                    Operator
-                  </option>
-                  <option value="Manager">
-                    Manager
-                  </option>
-                  <option value="Therapist">
-                    Therapist
-                  </option>
-                </select>
+              {/* DRILLDOWN TABLE */}
+              {dashboardDrilldown && (
+                <div style={{ marginTop: "24px", border: "1.5px solid var(--border)", borderRadius: "10px", padding: "16px", background: "#fff", boxShadow: "var(--shadow-md)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: 700 }}>{dashboardDrilldown.title} Details</h3>
+                    <button className="btn-secondary" onClick={() => setDashboardDrilldown(null)}>Close ✕</button>
+                  </div>
 
-                <br />
-                <br />
+                  <div className="data-table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Customer</th>
+                          <th>Treatment</th>
+                          <th>Status</th>
+                          <th style={{ textAlign: "right" }}>Total</th>
+                          <th style={{ textAlign: "right" }}>Paid</th>
+                          <th style={{ textAlign: "right" }}>Due</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboardDrilldown.records.map((item, idx) => (
+                          <tr key={item.appointmentId || idx}>
+                            <td>{item.appointmentDate}</td>
+                            <td style={{ fontWeight: 600 }}>{item.customerName}</td>
+                            <td>{item.treatment}</td>
+                            <td>
+                              <span className="badge-pill" style={{ background: "#f1f5f9" }}>{item.status || item.historyStatus}</span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>{formatCurrency(item.packagePrice || item.price)}</td>
+                            <td style={{ textAlign: "right", color: "#16a34a" }}>{formatCurrency(item.paidAmount)}</td>
+                            <td style={{ textAlign: "right", color: "#dc2626" }}>{formatCurrency(item.balance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
 
-                <p>
-                  Status: {staffStatus}
-                </p>
+            {/* ======================================================
+                3. TREATMENT PERFORMANCE ANALYTICS SECTION
+            ====================================================== */}
+            <div className="content-card">
+              <div className="content-header">
+                <div>
+                  <h2>💉 Treatment Performance</h2>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                    Breakdown of services sold, session counts, and revenue contribution
+                  </span>
+                </div>
+              </div>
 
+              <div className="data-table-container">
+                {dashboardData.treatmentPerformance.length === 0 ? (
+                  <div style={{ padding: "30px", textAlign: "center", color: "var(--text-muted)" }}>
+                    No treatment sales recorded for this reporting period.
+                  </div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Treatment</th>
+                        <th style={{ textAlign: "center" }}>Sessions / Bookings</th>
+                        <th style={{ textAlign: "right" }}>Collected Revenue</th>
+                        <th style={{ textAlign: "right" }}>% of Business</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardData.treatmentPerformance.map((t, idx) => (
+                        <tr key={t.treatment || idx}>
+                          <td style={{ fontWeight: 600, color: "var(--text-main)" }}>
+                            💉 {t.treatment}
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: 600 }}>
+                            {t.sessions} <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>({t.bookings} bookings)</span>
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: "#065f46" }}>
+                            {formatCurrency(t.revenue)}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                              <div style={{ width: "80px", height: "8px", background: "#e2e8f0", borderRadius: "4px", overflow: "hidden" }}>
+                                <div style={{ width: `${Math.min(100, t.percent)}%`, height: "100%", background: "var(--primary)" }} />
+                              </div>
+                              <strong style={{ minWidth: "36px" }}>{t.percent}%</strong>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* ======================================================
+                4. STAFF PERFORMANCE & INCENTIVE SYSTEM
+            ====================================================== */}
+            <div className="content-card">
+              <div className="content-header">
+                <div>
+                  <h2>👥 Staff Performance & Incentive System</h2>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                    Incentives calculated on <strong>actual paid amounts</strong> received (unpaid dues are factored when collected)
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: 600 }}>Incentive Rate:</label>
+                  <select
+                    className="form-control"
+                    style={{ width: "auto", fontWeight: 600 }}
+                    value={incentiveRate}
+                    onChange={(e) => setIncentiveRate(Number(e.target.value))}
+                  >
+                    <option value={3}>3% Commission</option>
+                    <option value={5}>5% Commission</option>
+                    <option value={8}>8% Commission</option>
+                    <option value={10}>10% Commission</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* SECTION A: BOOKING / SALES PERFORMANCE (WHO BROUGHT THE CUSTOMER) */}
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-main)", marginBottom: "8px", marginTop: "10px" }}>
+                🎯 Sales & Booking Attribution (Who Brought / Booked Patient)
+              </h3>
+              <div className="data-table-container" style={{ marginBottom: "24px" }}>
+                {dashboardData.staffBookingPerformance.length === 0 ? (
+                  <div style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)" }}>
+                    No bookings attributed for this period.
+                  </div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Staff Member (Booked By)</th>
+                        <th>Role</th>
+                        <th style={{ textAlign: "center" }}>Bookings Count</th>
+                        <th style={{ textAlign: "right" }}>Collected Revenue</th>
+                        <th style={{ textAlign: "right" }}>Sales Incentive ({incentiveRate}%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardData.staffBookingPerformance.map((s, idx) => (
+                        <tr key={s.userId || idx}>
+                          <td style={{ fontWeight: 600 }}>
+                            👤 {s.name} <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>({s.userId})</span>
+                          </td>
+                          <td>
+                            <span className="role-pill">{s.role}</span>
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: 600 }}>{s.bookingsCount}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: "#065f46" }}>
+                            {formatCurrency(s.collectedRevenue)}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 700, color: "var(--primary)" }}>
+                            {formatCurrency(s.incentive)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* SECTION B: TREATMENT EXECUTION PERFORMANCE (WHO PERFORMED TREATMENT) */}
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-main)", marginBottom: "4px" }}>
+                🩺 Treatment Execution (Specialists / Therapists)
+              </h3>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
+                Performance view only — incentives are awarded to the <strong>person who booked/brought</strong> the patient, not the therapist.
+              </p>
+              <div className="data-table-container">
+                {dashboardData.staffTherapyPerformance.length === 0 ? (
+                  <div style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)" }}>
+                    No treatments assigned to specialists for this period.
+                  </div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Specialist / Therapist</th>
+                        <th>Role</th>
+                        <th style={{ textAlign: "center" }}>⏱️ Working Hours</th>
+                        <th style={{ textAlign: "center" }}>Treatments Performed</th>
+                        <th style={{ textAlign: "center" }}>Total Sessions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardData.staffTherapyPerformance.map((s, idx) => (
+                        <tr key={s.userId || idx}>
+                          <td style={{ fontWeight: 600 }}>
+                            🩺 {s.name} <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>({s.userId})</span>
+                          </td>
+                          <td>
+                            <span className="badge-pill badge-therapist">{s.role}</span>
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: 600, color: "#1e40af" }}>
+                            {s.workingHours || "0 hrs"}
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: 700, fontSize: "16px", color: "var(--primary)" }}>
+                            {s.treatmentsCount}
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: 600, color: "#0d9488" }}>
+                            {s.sessionsCount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================
+            HISTORY TAB
+        ====================================================== */}
+        {activeSection === "History" && (
+          <div className="content-card">
+            <div className="content-header">
+              <h2>Appointment History & Closed Logs</h2>
+              <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Total Closed Events: {appointmentHistory.length}</span>
+            </div>
+
+            <div className="data-table-container">
+              {appointmentHistory.length === 0 ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                  No closed appointment history yet.
+                </div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Receipt ID</th>
+                      <th>Date & Time</th>
+                      <th>Customer</th>
+                      <th>Treatment</th>
+                      <th>Status</th>
+                      <th>Total</th>
+                      <th>Paid</th>
+                      <th>Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {appointmentHistory.map((item, idx) => (
+                      <tr key={item.appointmentId || idx}>
+                        <td style={{ fontWeight: 600, color: "var(--primary)" }}>{item.receiptId || "-"}</td>
+                        <td>{item.appointmentDate} {item.appointmentTime}</td>
+                        <td style={{ fontWeight: 600 }}>{item.customerName}</td>
+                        <td>{item.treatment}</td>
+                        <td>
+                          <span className={`badge-pill badge-status-${(item.historyStatus || item.status || "").toLowerCase().replace(" ", "")}`}>
+                            {item.historyStatus || item.status}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{formatCurrency(item.packagePrice || item.price)}</td>
+                        <td style={{ color: "#16a34a" }}>{formatCurrency(item.paidAmount)}</td>
+                        <td style={{ color: "#dc2626" }}>{formatCurrency(item.balance)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================
+            STAFF TAB
+        ====================================================== */}
+        {activeSection === "Staff" && (
+          <div className="content-card">
+            <div className="content-header">
+              <h2>Staff & Therapists Management</h2>
+              {currentUser?.role === "Admin" && (
                 <button
-                  onClick={() =>
-                    setStaffStatus(
-                      staffStatus === "Active"
-                        ? "Inactive"
-                        : "Active"
-                    )
-                  }
-                >
-                  {staffStatus === "Active"
-                    ? "Deactivate"
-                    : "Activate"}
-                </button>
-
-                <br />
-                <br />
-
-                <button
+                  className="btn-primary-cta"
                   onClick={() => {
-                    if (
-                      !staffName ||
-                      !staffPassword
-                    ) {
-                      alert(
-                        "Please complete all staff details."
-                      )
-                      return
-                    }
-
-                    if (
-                      editingStaffIndex !== null
-                    ) {
-                      const updatedStaff = [
-                        ...staff,
-                      ]
-
-                      updatedStaff[
-                        editingStaffIndex
-                      ] = {
-                        ...updatedStaff[
-                          editingStaffIndex
-                        ],
-                        name: staffName,
-                        password: staffPassword,
-                        role: staffRole,
-                        status: staffStatus,
-                      }
-
-                      setStaff(updatedStaff)
-                    } else {
-                      const newUserId =
-                        `SA${String(
-                          nextStaffNumber
-                        ).padStart(3, "0")}`
-
-                      const newStaff = {
-                        clinicId,
-                        userId: newUserId,
-                        name: staffName,
-                        password: staffPassword,
-                        role: staffRole,
-                        status: "Active",
-                      }
-
-                      setStaff((current) => [
-                        ...current,
-                        newStaff,
-                      ])
-
-                      setNextStaffNumber(
-                        (current) => current + 1
-                      )
-                    }
-
                     resetStaffForm()
+                    setShowStaffForm(true)
                   }}
                 >
-                  {editingStaffIndex !== null
-                    ? "Update Staff"
-                    : "Save Staff"}
-                </button>{" "}
-
-                <button onClick={resetStaffForm}>
-                  Cancel
+                  + Add Staff Member
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Staff ID</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>On Duty</th>
+                    {currentUser?.role === "Admin" && <th style={{ textAlign: "right" }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map((member, idx) => {
+                    const isOnDuty = activeStaff.some((a) => a.userId === member.userId)
+                    return (
+                      <tr key={member.userId || idx}>
+                        <td style={{ fontWeight: 600 }}>{member.userId}</td>
+                        <td style={{ fontWeight: 600 }}>{member.name}</td>
+                        <td>
+                          <span className="role-pill">{member.role}</span>
+                        </td>
+                        <td>
+                          <span className="badge-pill" style={{ background: member.status === "Active" ? "#dcfce7" : "#fee2e2", color: member.status === "Active" ? "#166534" : "#991b1b" }}>
+                            {member.status}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: "12px", fontWeight: 600, color: isOnDuty ? "#16a34a" : "#94a3b8" }}>
+                            {isOnDuty ? "🟢 Logged In" : "⚪ Offline"}
+                          </span>
+                        </td>
+                        {currentUser?.role === "Admin" && (
+                          <td style={{ textAlign: "right" }}>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: "4px 10px", fontSize: "12px" }}
+                                onClick={() => {
+                                  setEditingStaffIndex(idx)
+                                  setStaffName(member.name)
+                                  setStaffPassword(member.password)
+                                  setStaffRole(member.role)
+                                  setStaffStatus(member.status)
+                                  setShowStaffForm(true)
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className={member.status === "Active" ? "btn-danger" : "btn-secondary"}
+                                style={{ padding: "4px 10px", fontSize: "12px" }}
+                                onClick={() => {
+                                  const updated = [...staff]
+                                  updated[idx] = { ...member, status: member.status === "Active" ? "Inactive" : "Active" }
+                                  setStaff(updated)
+                                }}
+                              >
+                                {member.status === "Active" ? "Deactivate" : "Activate"}
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-      {/* ======================================================
-          TREATMENTS
-      ====================================================== */}
-
-      {activeSection === "Treatments" &&
-        (currentUser?.role === "Admin" ||
-          currentUser?.role === "Manager") && (
-          <div>
-            <h3>Treatment Management</h3>
-
-            {treatments
-              .filter(
-                (item) =>
-                  item.clinicId === clinicId
-              )
-              .map((item) => (
-                <div key={item.treatmentId}>
-                  <strong>{item.name}</strong>
-
-                  <p>
-                    Treatment ID:{" "}
-                    {item.treatmentId}
-                  </p>
-
-                  <p>
-                    Duration:{" "}
-                    {item.duration} minutes
-                  </p>
-
-                  <p>
-                    Sessions:{" "}
-                    {item.sessions}
-                  </p>
-
-                  <p>
-                    Default Package Price:{" "}
-                    {Number(
-                      item.price || 0
-                    ).toFixed(2)}
-                  </p>
-
-                  <p>
-                    Status: {item.status}
-                  </p>
-
-                  <button
-                    onClick={() => {
-                      setTreatments((current) =>
-                        current.map(
-                          (treatmentItem) =>
-                            treatmentItem.treatmentId ===
-                            item.treatmentId
-                              ? {
-                                  ...treatmentItem,
-                                  status:
-                                    treatmentItem.status ===
-                                    "Active"
-                                      ? "Inactive"
-                                      : "Active",
-                                }
-                              : treatmentItem
-                        )
-                      )
-                    }}
-                  >
-                    {item.status === "Active"
-                      ? "Disable Treatment"
-                      : "Activate Treatment"}
-                  </button>{" "}
-
-                  <button
-                    onClick={() => {
-                      const index =
-                        treatments.findIndex(
-                          (treatmentItem) =>
-                            treatmentItem.treatmentId ===
-                            item.treatmentId
-                        )
-
-                      setEditingTreatmentIndex(index)
-                      setTreatmentName(item.name)
-                      setTreatmentDuration(
-                        item.duration
-                      )
-                      setTreatmentSessions(
-                        item.sessions
-                      )
-                      setTreatmentPrice(
-                        item.price || 0
-                      )
-                      setTreatmentStatus(
-                        item.status
-                      )
-                      setShowTreatmentForm(true)
-                    }}
-                  >
-                    Edit Treatment
-                  </button>
-
-                  <hr />
-                </div>
-              ))}
-
-            <button
-              onClick={() => {
-                resetTreatmentForm()
-                setShowTreatmentForm(true)
-              }}
-            >
-              Add Treatment
-            </button>
-
-            {showTreatmentForm && (
-              <div>
-                <h4>
-                  {editingTreatmentIndex !== null
-                    ? "Edit Treatment"
-                    : "Add Treatment"}
-                </h4>
-
-                <input
-                  type="text"
-                  placeholder="Treatment Name"
-                  value={treatmentName}
-                  onChange={(e) =>
-                    setTreatmentName(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Duration in minutes"
-                  value={treatmentDuration}
-                  onChange={(e) =>
-                    setTreatmentDuration(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Number of Sessions"
-                  value={treatmentSessions}
-                  onChange={(e) =>
-                    setTreatmentSessions(
-                      Number(e.target.value)
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Default Package Price"
-                  value={treatmentPrice}
-                  onChange={(e) =>
-                    setTreatmentPrice(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <p>
-                  Status: {treatmentStatus}
-                </p>
-
+        {/* ======================================================
+            TREATMENTS TAB
+        ====================================================== */}
+        {activeSection === "Treatments" && (
+          <div className="content-card">
+            <div className="content-header">
+              <h2>Treatments & Services Catalog</h2>
+              {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
                 <button
-                  onClick={() =>
-                    setTreatmentStatus(
-                      treatmentStatus ===
-                        "Active"
-                        ? "Inactive"
-                        : "Active"
-                    )
-                  }
-                >
-                  {treatmentStatus ===
-                  "Active"
-                    ? "Deactivate Treatment"
-                    : "Activate Treatment"}
-                </button>
-
-                <br />
-                <br />
-
-                <button
+                  className="btn-primary-cta"
                   onClick={() => {
-                    if (
-                      !treatmentName ||
-                      !treatmentDuration ||
-                      !treatmentSessions
-                    ) {
-                      alert(
-                        "Please complete all treatment details."
-                      )
-                      return
-                    }
-
-                    const numericPrice =
-                      Number(
-                        treatmentPrice || 0
-                      )
-
-                    if (numericPrice < 0) {
-                      alert(
-                        "Treatment price cannot be negative."
-                      )
-                      return
-                    }
-
-                    if (
-                      editingTreatmentIndex !==
-                      null
-                    ) {
-                      const updatedTreatments = [
-                        ...treatments,
-                      ]
-
-                      updatedTreatments[
-                        editingTreatmentIndex
-                      ] = {
-                        ...updatedTreatments[
-                          editingTreatmentIndex
-                        ],
-                        name:
-                          treatmentName,
-                        duration:
-                          Number(
-                            treatmentDuration
-                          ),
-                        sessions:
-                          Number(
-                            treatmentSessions
-                          ),
-                        price:
-                          numericPrice,
-                        status:
-                          treatmentStatus,
-                      }
-
-                      setTreatments(
-                        updatedTreatments
-                      )
-                    } else {
-                      const newTreatmentId =
-                        `TR${String(
-                          nextTreatmentNumber
-                        ).padStart(3, "0")}`
-
-                      const newTreatment = {
-                        clinicId,
-                        treatmentId:
-                          newTreatmentId,
-                        name:
-                          treatmentName,
-                        duration:
-                          Number(
-                            treatmentDuration
-                          ),
-                        sessions:
-                          Number(
-                            treatmentSessions
-                          ),
-                        price:
-                          numericPrice,
-                        status:
-                          treatmentStatus,
-                      }
-
-                      setTreatments((current) => [
-                        ...current,
-                        newTreatment,
-                      ])
-
-                      setNextTreatmentNumber(
-                        (current) =>
-                          current + 1
-                      )
-                    }
-
                     resetTreatmentForm()
+                    setShowTreatmentForm(true)
                   }}
                 >
-                  {editingTreatmentIndex !==
-                  null
-                    ? "Update Treatment"
-                    : "Save Treatment"}
-                </button>{" "}
-
-                <button
-                  onClick={
-                    resetTreatmentForm
-                  }
-                >
-                  Cancel
+                  + Add Treatment
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Treatment ID</th>
+                    <th>Treatment Name</th>
+                    <th>Duration</th>
+                    <th>Default Sessions</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                    {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {treatments.map((t, idx) => (
+                    <tr key={t.treatmentId || idx}>
+                      <td style={{ fontWeight: 600 }}>{t.treatmentId}</td>
+                      <td style={{ fontWeight: 600 }}>{t.name}</td>
+                      <td>⏱️ {t.duration} mins</td>
+                      <td>🔢 {t.sessions || 1} session</td>
+                      <td style={{ fontWeight: 600 }}>{formatCurrency(t.price)}</td>
+                      <td>
+                        <span className="badge-pill" style={{ background: t.status === "Active" ? "#dcfce7" : "#fee2e2", color: t.status === "Active" ? "#166534" : "#991b1b" }}>
+                          {t.status}
+                        </span>
+                      </td>
+                      {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: "4px 10px", fontSize: "12px" }}
+                              onClick={() => {
+                                setEditingTreatmentIndex(idx)
+                                setTreatmentName(t.name)
+                                setTreatmentDuration(t.duration)
+                                setTreatmentSessions(t.sessions || 1)
+                                setTreatmentPrice(t.price || 0)
+                                setTreatmentStatus(t.status)
+                                setShowTreatmentForm(true)
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={t.status === "Active" ? "btn-danger" : "btn-secondary"}
+                              style={{ padding: "4px 10px", fontSize: "12px" }}
+                              onClick={() => {
+                                const updated = [...treatments]
+                                updated[idx] = { ...t, status: t.status === "Active" ? "Inactive" : "Active" }
+                                setTreatments(updated)
+                              }}
+                            >
+                              {t.status === "Active" ? "Disable" : "Activate"}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-      {/* ======================================================
-          ROOMS
-      ====================================================== */}
-
-      {activeSection === "Rooms" &&
-        (currentUser?.role === "Admin" ||
-          currentUser?.role === "Manager") && (
-          <div>
-            <h3>Room Management</h3>
-
-            {rooms
-              .filter(
-                (room) =>
-                  room.clinicId === clinicId
-              )
-              .map((room) => (
-                <div key={room.roomId}>
-                  <strong>{room.name}</strong>
-
-                  <p>
-                    Room ID: {room.roomId}
-                  </p>
-
-                  <p>
-                    Status: {room.status}
-                  </p>
-
-                  <button
-                    onClick={() => {
-                      setRooms((current) =>
-                        current.map(
-                          (roomItem) =>
-                            roomItem.roomId ===
-                            room.roomId
-                              ? {
-                                  ...roomItem,
-                                  status:
-                                    roomItem.status ===
-                                    "Active"
-                                      ? "Inactive"
-                                      : "Active",
-                                }
-                              : roomItem
-                        )
-                      )
-                    }}
-                  >
-                    {room.status === "Active"
-                      ? "Disable Room"
-                      : "Activate Room"}
-                  </button>{" "}
-
-                  <button
-                    onClick={() => {
-                      setEditingRoomId(
-                        room.roomId
-                      )
-                      setRoomName(
-                        room.name
-                      )
-                      setRoomStatus(
-                        room.status
-                      )
-                      setShowRoomForm(true)
-                    }}
-                  >
-                    Edit Room
-                  </button>
-
-                  <hr />
-                </div>
-              ))}
-
-            <button
-              onClick={() => {
-                resetRoomForm()
-                setShowRoomForm(true)
-              }}
-            >
-              Add Room
-            </button>
-
-            {showRoomForm && (
-              <div>
-                <h4>
-                  {editingRoomId !== null
-                    ? "Edit Room"
-                    : "Add Room"}
-                </h4>
-
-                <input
-                  type="text"
-                  placeholder="Room Name"
-                  value={roomName}
-                  onChange={(e) =>
-                    setRoomName(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <p>
-                  Status: {roomStatus}
-                </p>
-
+        {/* ======================================================
+            ROOMS TAB
+        ====================================================== */}
+        {activeSection === "Rooms" && (
+          <div className="content-card">
+            <div className="content-header">
+              <h2>Treatment Rooms & Suites</h2>
+              {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
                 <button
-                  onClick={() =>
-                    setRoomStatus(
-                      roomStatus === "Active"
-                        ? "Inactive"
-                        : "Active"
-                    )
-                  }
-                >
-                  {roomStatus === "Active"
-                    ? "Disable Room"
-                    : "Activate Room"}
-                </button>
-
-                <br />
-                <br />
-
-                <button
+                  className="btn-primary-cta"
                   onClick={() => {
-                    if (!roomName) {
-                      alert(
-                        "Please enter a room name."
-                      )
-                      return
-                    }
-
-                    if (
-                      editingRoomId !== null
-                    ) {
-                      setRooms((current) =>
-                        current.map(
-                          (room) =>
-                            room.roomId ===
-                            editingRoomId
-                              ? {
-                                  ...room,
-                                  name:
-                                    roomName,
-                                  status:
-                                    roomStatus,
-                                }
-                              : room
-                        )
-                      )
-                    } else {
-                      const numbers =
-                        rooms
-                          .filter(
-                            (room) =>
-                              room.clinicId ===
-                              clinicId
-                          )
-                          .map((room) => {
-                            const match =
-                              room.roomId.match(
-                                /^RM(\d+)$/
-                              )
-
-                            return match
-                              ? Number(
-                                  match[1]
-                                )
-                              : 0
-                          })
-
-                      const nextNumber =
-                        numbers.length
-                          ? Math.max(
-                              ...numbers
-                            ) + 1
-                          : 1
-
-                      const newRoom = {
-                        clinicId,
-                        roomId:
-                          `RM${String(
-                            nextNumber
-                          ).padStart(3, "0")}`,
-                        name:
-                          roomName,
-                        status:
-                          roomStatus,
-                      }
-
-                      setRooms((current) => [
-                        ...current,
-                        newRoom,
-                      ])
-                    }
-
                     resetRoomForm()
+                    setShowRoomForm(true)
                   }}
                 >
-                  {editingRoomId !== null
-                    ? "Update Room"
-                    : "Save Room"}
-                </button>{" "}
-
-                <button
-                  onClick={
-                    resetRoomForm
-                  }
-                >
-                  Cancel
+                  + Add Room
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Room ID</th>
+                    <th>Room Name</th>
+                    <th>Status</th>
+                    {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rooms.map((r, idx) => (
+                    <tr key={r.roomId || idx}>
+                      <td style={{ fontWeight: 600 }}>{r.roomId}</td>
+                      <td style={{ fontWeight: 600 }}>🚪 {r.name}</td>
+                      <td>
+                        <span className="badge-pill" style={{ background: r.status === "Active" ? "#dcfce7" : "#fee2e2", color: r.status === "Active" ? "#166534" : "#991b1b" }}>
+                          {r.status}
+                        </span>
+                      </td>
+                      {(currentUser?.role === "Admin" || currentUser?.role === "Manager") && (
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: "4px 10px", fontSize: "12px" }}
+                              onClick={() => {
+                                setEditingRoomId(r.roomId)
+                                setRoomName(r.name)
+                                setRoomStatus(r.status)
+                                setShowRoomForm(true)
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={r.status === "Active" ? "btn-danger" : "btn-secondary"}
+                              style={{ padding: "4px 10px", fontSize: "12px" }}
+                              onClick={() => {
+                                const updated = [...rooms]
+                                updated[idx] = { ...r, status: r.status === "Active" ? "Inactive" : "Active" }
+                                setRooms(updated)
+                              }}
+                            >
+                              {r.status === "Active" ? "Disable" : "Activate"}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
+
+        {/* ======================================================
+            CLINIC SETTINGS TAB (ADMIN ONLY)
+        ====================================================== */}
+        {activeSection === "Clinic" && currentUser?.role === "Admin" && (
+          <div className="content-card" style={{ maxWidth: "700px" }}>
+            <div className="content-header">
+              <h2>Clinic Profile & Settings</h2>
+              <button
+                className="btn-primary-cta"
+                onClick={() => {
+                  setClinicName(clinic.name)
+                  setClinicPhone(clinic.phone)
+                  setClinicAddress(clinic.address)
+                  setClinicOpeningTime(clinic.openingTime)
+                  setClinicClosingTime(clinic.closingTime)
+                  setShowClinicForm(true)
+                }}
+              >
+                ✏️ Edit Settings
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div className="inspector-row">
+                <span className="label">Clinic ID</span>
+                <span className="val">{clinic.clinicId}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Clinic Name</span>
+                <span className="val">{clinic.name}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Phone</span>
+                <span className="val">{clinic.phone || "Not set"}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Address</span>
+                <span className="val">{clinic.address || "Not set"}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Opening Time</span>
+                <span className="val">{clinic.openingTime}</span>
+              </div>
+              <div className="inspector-row">
+                <span className="label">Closing Time</span>
+                <span className="val">{clinic.closingTime}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
 
       {/* ======================================================
-          CLINIC
+          MODAL: NEW / EDIT APPOINTMENT FORM
       ====================================================== */}
+      {showForm && (
+        <div className="modal-backdrop" onClick={() => setShowForm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingIndex !== null ? "Reschedule Appointment" : "New Patient Booking"}</h2>
+              <button className="btn-close-modal" onClick={() => setShowForm(false)}>✕</button>
+            </div>
 
-      {activeSection === "Clinic" &&
-        currentUser?.role === "Admin" && (
-          <div>
-            <h3>Clinic Settings</h3>
-
-            <p>
-              Clinic ID:{" "}
-              <strong>
-                {clinic.clinicId}
-              </strong>
-            </p>
-
-            <p>
-              Clinic Name:{" "}
-              <strong>
-                {clinic.name}
-              </strong>
-            </p>
-
-            <p>
-              Phone:{" "}
-              {clinic.phone || "Not set"}
-            </p>
-
-            <p>
-              Address:{" "}
-              {clinic.address || "Not set"}
-            </p>
-
-            <p>
-              Opening Time:{" "}
-              {clinic.openingTime}
-            </p>
-
-            <p>
-              Closing Time:{" "}
-              {clinic.closingTime}
-            </p>
-
-            <button
-              onClick={() => {
-                setClinicName(clinic.name)
-                setClinicPhone(clinic.phone)
-                setClinicAddress(clinic.address)
-                setClinicOpeningTime(
-                  clinic.openingTime
-                )
-                setClinicClosingTime(
-                  clinic.closingTime
-                )
-                setShowClinicForm(true)
-              }}
-            >
-              Edit Clinic
-            </button>
-
-            {showClinicForm && (
-              <div>
-                <h4>Edit Clinic</h4>
-
+            <form onSubmit={handleBookingSubmit}>
+              <div className="form-group">
+                <label>Customer Name *</label>
                 <input
                   type="text"
-                  placeholder="Clinic Name"
-                  value={clinicName}
-                  onChange={(e) =>
-                    setClinicName(
-                      e.target.value
-                    )
-                  }
+                  className="form-control"
+                  placeholder="e.g. Sarah Khan"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  required
                 />
+              </div>
 
-                <br />
-                <br />
-
+              <div className="form-group">
+                <label>Phone Number *</label>
                 <input
-                  type="text"
-                  placeholder="Clinic Phone"
-                  value={clinicPhone}
-                  onChange={(e) =>
-                    setClinicPhone(
-                      e.target.value
-                    )
-                  }
+                  type="tel"
+                  className="form-control"
+                  placeholder="e.g. 03001234567"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  required
                 />
+              </div>
 
-                <br />
-                <br />
-
-                <input
-                  type="text"
-                  placeholder="Clinic Address"
-                  value={clinicAddress}
-                  onChange={(e) =>
-                    setClinicAddress(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <br />
-                <br />
-
-                <label>
-                  Opening Time:{" "}
-                  <input
-                    type="time"
-                    value={clinicOpeningTime}
-                    onChange={(e) =>
-                      setClinicOpeningTime(
-                        e.target.value
-                      )
+              <div className="form-group">
+                <label>Treatment *</label>
+                <select
+                  className="form-control"
+                  value={treatment}
+                  onChange={(e) => {
+                    const sel = e.target.value
+                    setTreatment(sel)
+                    const dur = getTreatmentDuration(sel)
+                    const sess = getTreatmentSessions(sel)
+                    const pr = getTreatmentPrice(sel)
+                    setAppointmentSessions(sess)
+                    setAppointmentPrice(pr)
+                    if (appointmentDate) {
+                      const autoTime = findFirstAvailableTime(appointmentDate, dur)
+                      if (autoTime) setAppointmentTime(autoTime)
                     }
-                  />
-                </label>
-
-                <br />
-                <br />
-
-                <label>
-                  Closing Time:{" "}
-                  <input
-                    type="time"
-                    value={clinicClosingTime}
-                    onChange={(e) =>
-                      setClinicClosingTime(
-                        e.target.value
-                      )
-                    }
-                  />
-                </label>
-
-                <br />
-                <br />
-
-                <button
-                  onClick={() => {
-                    if (
-                      !clinicName ||
-                      !clinicOpeningTime ||
-                      !clinicClosingTime
-                    ) {
-                      alert(
-                        "Please complete the required clinic details."
-                      )
-                      return
-                    }
-
-                    setClinic((current) => ({
-                      ...current,
-                      name: clinicName,
-                      phone: clinicPhone,
-                      address: clinicAddress,
-                      openingTime:
-                        clinicOpeningTime,
-                      closingTime:
-                        clinicClosingTime,
-                    }))
-
-                    setShowClinicForm(false)
                   }}
+                  required
                 >
-                  Save Clinic
-                </button>{" "}
+                  <option value="">Select Treatment</option>
+                  {treatments.filter((t) => t.status === "Active").map((t) => (
+                    <option key={t.treatmentId} value={t.name}>
+                      {t.name} ({t.duration}m - Rs. {t.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <button
-                  onClick={() =>
-                    setShowClinicForm(false)
-                  }
-                >
-                  Cancel
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date *</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={appointmentDate}
+                    onChange={(e) => {
+                      setAppointmentDate(e.target.value)
+                      if (treatment) {
+                        const dur = getTreatmentDuration(treatment)
+                        const autoTime = findFirstAvailableTime(e.target.value, dur)
+                        if (autoTime) setAppointmentTime(autoTime)
+                      }
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Start Time *</label>
+                  <input
+                    type="time"
+                    className="form-control"
+                    value={appointmentTime}
+                    onChange={(e) => setAppointmentTime(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {appointmentTime && treatment && (
+                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px" }}>
+                  ⏰ Estimated End Time: <strong>{calculateEndTime(appointmentTime, getTreatmentDuration(treatment))}</strong> ({getTreatmentDuration(treatment)} mins)
+                </div>
+              )}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Package Price (Rs.)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={appointmentPrice}
+                    onChange={(e) => setAppointmentPrice(e.target.value)}
+                    min="0"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Advance Paid (Rs.)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)", marginBottom: "14px" }}>
+                Remaining Balance Due: <span style={{ color: "#dc2626" }}>{formatCurrency(calculateBalance(appointmentPrice, paidAmount))}</span>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary-cta">
+                  {editingIndex !== null ? "Save Rescheduled Booking" : "Confirm Booking"}
                 </button>
               </div>
-            )}
+            </form>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* ======================================================
+          MODAL: ASSIGN ROOM & THERAPIST
+      ====================================================== */}
+      {showAssignModal && assigningAppointmentIndex !== null && (
+        <div className="modal-backdrop" onClick={() => setShowAssignModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Assign Room & Specialist</h2>
+              <button className="btn-close-modal" onClick={() => setShowAssignModal(false)}>✕</button>
+            </div>
+
+            <div className="form-group">
+              <label>Select Room *</label>
+              <select
+                className="form-control"
+                value={assignedRoom}
+                onChange={(e) => setAssignedRoom(e.target.value)}
+              >
+                <option value="">Select Room</option>
+                {rooms.filter((r) => r.status === "Active").map((r) => (
+                  <option key={r.roomId} value={r.roomId}>🚪 {r.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Select Specialist (On-Duty) *</label>
+              <select
+                className="form-control"
+                value={assignedTherapist}
+                onChange={(e) => setAssignedTherapist(e.target.value)}
+              >
+                <option value="">Select Therapist</option>
+                {getAvailableTherapists().map((s) => (
+                  <option key={s.userId} value={s.userId}>👤 {s.name} ({s.userId})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setShowAssignModal(false)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary-cta"
+                onClick={() => handleAssignTreatment(assigningAppointmentIndex)}
+              >
+                Start Treatment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          MODAL: STAFF FORM
+      ====================================================== */}
+      {showStaffForm && (
+        <div className="modal-backdrop" onClick={() => setShowStaffForm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingStaffIndex !== null ? "Edit Staff Member" : "Add Staff Member"}</h2>
+              <button className="btn-close-modal" onClick={() => setShowStaffForm(false)}>✕</button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              if (!staffName || !staffPassword) {
+                alert("Please enter both name and password.")
+                return
+              }
+              if (editingStaffIndex !== null) {
+                const updated = [...staff]
+                updated[editingStaffIndex] = {
+                  ...updated[editingStaffIndex],
+                  name: staffName,
+                  password: staffPassword,
+                  role: staffRole,
+                  status: staffStatus,
+                }
+                setStaff(updated)
+                resetStaffForm()
+                return
+              }
+              const padded = String(nextStaffNumber).padStart(3, "0")
+              const newId = `SA${padded}`
+              setStaff([...staff, { clinicId, userId: newId, name: staffName, password: staffPassword, role: staffRole, status: staffStatus }])
+              setNextStaffNumber((curr) => Number(curr) + 1)
+              resetStaffForm()
+            }}>
+              <div className="form-group">
+                <label>Staff Full Name *</label>
+                <input type="text" className="form-control" value={staffName} onChange={(e) => setStaffName(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Password *</label>
+                <input type="password" className="form-control" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} required />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Role</label>
+                  <select className="form-control" value={staffRole} onChange={(e) => setStaffRole(e.target.value)}>
+                    <option value="Operator">Operator</option>
+                    <option value="Therapist">Therapist</option>
+                    <option value="Manager">Manager</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select className="form-control" value={staffStatus} onChange={(e) => setStaffStatus(e.target.value)}>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowStaffForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary-cta">Save Staff</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          MODAL: TREATMENT FORM
+      ====================================================== */}
+      {showTreatmentForm && (
+        <div className="modal-backdrop" onClick={() => setShowTreatmentForm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingTreatmentIndex !== null ? "Edit Treatment" : "Add Treatment"}</h2>
+              <button className="btn-close-modal" onClick={() => setShowTreatmentForm(false)}>✕</button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              if (!treatmentName || !treatmentDuration) {
+                alert("Please enter name and duration.")
+                return
+              }
+              if (Number(treatmentPrice) < 0) {
+                alert("Price cannot be negative.")
+                return
+              }
+              if (editingTreatmentIndex !== null) {
+                const updated = [...treatments]
+                updated[editingTreatmentIndex] = {
+                  ...updated[editingTreatmentIndex],
+                  name: treatmentName,
+                  duration: Number(treatmentDuration),
+                  sessions: Number(treatmentSessions) || 1,
+                  price: Number(treatmentPrice) || 0,
+                  status: treatmentStatus,
+                }
+                setTreatments(updated)
+                resetTreatmentForm()
+                return
+              }
+              const padded = String(nextTreatmentNumber).padStart(3, "0")
+              const newId = `TR${padded}`
+              setTreatments([...treatments, { clinicId, treatmentId: newId, name: treatmentName, duration: Number(treatmentDuration), sessions: Number(treatmentSessions) || 1, price: Number(treatmentPrice) || 0, status: treatmentStatus }])
+              setNextTreatmentNumber((curr) => Number(curr) + 1)
+              resetTreatmentForm()
+            }}>
+              <div className="form-group">
+                <label>Treatment Name *</label>
+                <input type="text" className="form-control" value={treatmentName} onChange={(e) => setTreatmentName(e.target.value)} required />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Duration (Mins) *</label>
+                  <input type="number" className="form-control" value={treatmentDuration} onChange={(e) => setTreatmentDuration(e.target.value)} required min="5" />
+                </div>
+                <div className="form-group">
+                  <label>Default Sessions</label>
+                  <input type="number" className="form-control" value={treatmentSessions} onChange={(e) => setTreatmentSessions(e.target.value)} min="1" />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Default Price (Rs.)</label>
+                  <input type="number" className="form-control" value={treatmentPrice} onChange={(e) => setTreatmentPrice(e.target.value)} min="0" />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select className="form-control" value={treatmentStatus} onChange={(e) => setTreatmentStatus(e.target.value)}>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowTreatmentForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary-cta">Save Treatment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          MODAL: ROOM FORM
+      ====================================================== */}
+      {showRoomForm && (
+        <div className="modal-backdrop" onClick={() => setShowRoomForm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingRoomId !== null ? "Edit Room" : "Add Room"}</h2>
+              <button className="btn-close-modal" onClick={() => setShowRoomForm(false)}>✕</button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              if (!roomName) {
+                alert("Please enter room name.")
+                return
+              }
+              if (editingRoomId !== null) {
+                setRooms(rooms.map((r) => (r.roomId === editingRoomId ? { ...r, name: roomName, status: roomStatus } : r)))
+                resetRoomForm()
+                return
+              }
+              const nextNum = rooms.length + 1
+              const padded = String(nextNum).padStart(3, "0")
+              const newId = `RM${padded}`
+              setRooms([...rooms, { clinicId, roomId: newId, name: roomName, status: roomStatus }])
+              resetRoomForm()
+            }}>
+              <div className="form-group">
+                <label>Room Name *</label>
+                <input type="text" className="form-control" value={roomName} onChange={(e) => setRoomName(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <select className="form-control" value={roomStatus} onChange={(e) => setRoomStatus(e.target.value)}>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowRoomForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary-cta">Save Room</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          MODAL: CLINIC FORM
+      ====================================================== */}
+      {showClinicForm && (
+        <div className="modal-backdrop" onClick={() => setShowClinicForm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Edit Clinic Information</h2>
+              <button className="btn-close-modal" onClick={() => setShowClinicForm(false)}>✕</button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              setClinic({
+                ...clinic,
+                name: clinicName,
+                phone: clinicPhone,
+                address: clinicAddress,
+                openingTime: clinicOpeningTime,
+                closingTime: clinicClosingTime,
+              })
+              setShowClinicForm(false)
+            }}>
+              <div className="form-group">
+                <label>Clinic Name</label>
+                <input type="text" className="form-control" value={clinicName} onChange={(e) => setClinicName(e.target.value)} required />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Phone Number</label>
+                  <input type="text" className="form-control" value={clinicPhone} onChange={(e) => setClinicPhone(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Address</label>
+                  <input type="text" className="form-control" value={clinicAddress} onChange={(e) => setClinicAddress(e.target.value)} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Opening Time</label>
+                  <input type="time" className="form-control" value={clinicOpeningTime} onChange={(e) => setClinicOpeningTime(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                  <label>Closing Time</label>
+                  <input type="time" className="form-control" value={clinicClosingTime} onChange={(e) => setClinicClosingTime(e.target.value)} required />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setShowClinicForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary-cta">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
