@@ -185,6 +185,9 @@ function App() {
   const [appointmentPrice, setAppointmentPrice] = useState(0)
   const [paidAmount, setPaidAmount] = useState(0)
   const [editingIndex, setEditingIndex] = useState(null)
+  const [editingHistoryIndex, setEditingHistoryIndex] = useState(null)
+  const [packagePriceLocked, setPackagePriceLocked] = useState(false)
+  const [paidAmountLocked, setPaidAmountLocked] = useState(false)
 
   // ============================================================
   // TREATMENT ASSIGNMENT MODAL / DROPDOWN
@@ -229,6 +232,14 @@ function App() {
   const getTreatmentPrice = (treatmentNameValue) => {
     const selectedTreatment = getTreatment(treatmentNameValue)
     return selectedTreatment ? Number(selectedTreatment.price) || 0 : 0
+  }
+
+  const getRemainingSessions = (appointment) => {
+    const totalSessions = Number(appointment?.sessions) || 1
+    const sessionsUsed = appointment?.sessionsUsed === undefined
+      ? (appointment?.historyStatus === "Completed" || appointment?.status === "Completed" ? 1 : 0)
+      : Number(appointment.sessionsUsed) || 0
+    return Math.max(0, Number(appointment?.remainingSessions ?? totalSessions - sessionsUsed))
   }
 
   const calculateBalance = (price, paid) => {
@@ -307,6 +318,9 @@ function App() {
     setAppointmentPrice(0)
     setPaidAmount(0)
     setEditingIndex(null)
+    setEditingHistoryIndex(null)
+    setPackagePriceLocked(false)
+    setPaidAmountLocked(false)
     setShowForm(false)
   }
 
@@ -349,6 +363,9 @@ function App() {
     setPaidAmount(0)
     setAppointmentDate(todayDate)
     setAppointmentTime(firstTime)
+    setEditingHistoryIndex(null)
+    setPackagePriceLocked(false)
+    setPaidAmountLocked(false)
     setShowForm(true)
   }
 
@@ -362,6 +379,36 @@ function App() {
     setAppointmentSessions(Number(appointment.sessions) || getTreatmentSessions(appointment.treatment))
     setAppointmentPrice(Number(appointment.packagePrice) || getTreatmentPrice(appointment.treatment))
     setPaidAmount(Number(appointment.paidAmount) || 0)
+    setEditingHistoryIndex(null)
+    setPackagePriceLocked(Number(appointment.sessionsUsed || 0) > 0)
+    setPaidAmountLocked(
+      Number(appointment.sessionsUsed || 0) > 0 &&
+      calculateBalance(Number(appointment.packagePrice || 0), Number(appointment.paidAmount || 0)) <= 0
+    )
+    setShowForm(true)
+  }
+
+  const openFollowUpForm = (historyItem, historyIndex) => {
+    const totalSessions = Number(historyItem.sessions) || 1
+    const sessionsUsed = historyItem.sessionsUsed === undefined ? 1 : Number(historyItem.sessionsUsed) || 0
+    const remainingSessions = getRemainingSessions(historyItem)
+    if (remainingSessions <= 0) return
+
+    const followUpDate = todaySafe()
+    setEditingIndex(null)
+    setEditingHistoryIndex(historyIndex)
+    setCustomerName(historyItem.customerName || "")
+    setPhoneNumber(historyItem.phoneNumber || "")
+    setAppointmentDate(followUpDate)
+    setAppointmentTime(findFirstAvailableTime(followUpDate, Number(historyItem.duration) || 30))
+    setTreatment(historyItem.treatment || "")
+    setAppointmentSessions(totalSessions)
+    setAppointmentPrice(Number(historyItem.packagePrice || historyItem.price || 0))
+    setPaidAmount(Number(historyItem.paidAmount || 0))
+    setPackagePriceLocked(true)
+    setPaidAmountLocked(
+      calculateBalance(Number(historyItem.packagePrice || historyItem.price || 0), Number(historyItem.paidAmount || 0)) <= 0
+    )
     setShowForm(true)
   }
 
@@ -524,6 +571,48 @@ function App() {
       return
     }
 
+    if (editingHistoryIndex !== null) {
+      const source = appointmentHistory[editingHistoryIndex]
+      const totalSessions = Number(source?.sessions) || 1
+      const sessionsUsed = Number(source?.sessionsUsed) || 0
+      const remainingSessions = Number(source?.remainingSessions ?? totalSessions - sessionsUsed)
+      if (!source || remainingSessions <= 0) {
+        alert("All sessions in this package have already been used.")
+        return
+      }
+
+      const followUpAppointment = {
+        ...source,
+        appointmentId: `APT${Date.now()}`,
+        appointmentDate,
+        appointmentTime,
+        endTime,
+        duration,
+        status: "Booked",
+        historyStatus: undefined,
+        historyAt: undefined,
+        sessions: totalSessions,
+        sessionsUsed,
+        remainingSessions,
+        packageId: source.packageId || source.appointmentId,
+        packagePrice: Number(source.packagePrice || source.price || 0),
+        paidAmount: numericPaid,
+        balance: calculateBalance(Number(source.packagePrice || source.price || 0), numericPaid),
+        room: availableRoom.roomId,
+        therapist: "",
+        rebookedFromAppointmentId: source.appointmentId,
+        rebookedBy: {
+          clinicId,
+          userId: currentUser?.userId || username,
+          name: currentUser?.name || username,
+        },
+      }
+      setAppointments((current) => [...current, followUpAppointment])
+      logAppointmentActivity(followUpAppointment, "Follow-up Session Booked")
+      resetAppointmentForm()
+      return
+    }
+
     if (editingIndex !== null) {
       // RESCHEDULE / EDIT
       const previous = appointments[editingIndex]
@@ -537,9 +626,9 @@ function App() {
         duration,
         treatment,
         sessions: appointmentSessions,
-        packagePrice: numericPrice,
+        packagePrice: packagePriceLocked ? Number(previous.packagePrice || 0) : numericPrice,
         paidAmount: numericPaid,
-        balance: calculateBalance(numericPrice, numericPaid),
+        balance: calculateBalance(packagePriceLocked ? Number(previous.packagePrice || 0) : numericPrice, numericPaid),
         room: availableRoom.roomId,
         rescheduledBy: {
           clinicId,
@@ -580,6 +669,9 @@ function App() {
       room: availableRoom.roomId,
       therapist: "",
       createdAt: Date.now(),
+      sessionsUsed: 0,
+      remainingSessions: Number(appointmentSessions) || 1,
+      packageId: generatedAppointmentId,
       bookedBy: {
         clinicId,
         userId: currentUser?.userId || username,
@@ -602,6 +694,12 @@ function App() {
         ...target,
         status: newStatus,
         historyStatus: newStatus,
+        sessionsUsed: newStatus === "Completed"
+          ? Math.min(Number(target.sessions || 1), Number(target.sessionsUsed || 0) + 1)
+          : Number(target.sessionsUsed || 0),
+        remainingSessions: newStatus === "Completed"
+          ? Math.max(0, Number(target.sessions || 1) - Math.min(Number(target.sessions || 1), Number(target.sessionsUsed || 0) + 1))
+          : Number(target.remainingSessions ?? Math.max(0, Number(target.sessions || 1) - Number(target.sessionsUsed || 0))),
         historyAt: Date.now(),
         closedBy: {
           clinicId,
@@ -612,6 +710,9 @@ function App() {
       setAppointmentHistory((curr) => [historyItem, ...curr])
       setAppointments((curr) => curr.filter((_, i) => i !== index))
       logAppointmentActivity(target, `Status changed to ${newStatus}`)
+      if (newStatus === "Completed" && historyItem.remainingSessions > 0) {
+        alert(`Session completed. ${historyItem.remainingSessions} session${historyItem.remainingSessions === 1 ? "" : "s"} remaining. You can book the next session from History.`)
+      }
       return
     }
 
@@ -1958,10 +2059,13 @@ function App() {
                       <th>Total</th>
                       <th>Paid</th>
                       <th>Due</th>
+                      <th style={{ textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {appointmentHistory.map((item, idx) => (
+                    {appointmentHistory.map((item, idx) => {
+                      const remainingSessions = getRemainingSessions(item)
+                      return (
                       <tr key={item.appointmentId || idx}>
                         <td style={{ fontWeight: 600, color: "var(--primary)" }}>{item.receiptId || "-"}</td>
                         <td>{item.appointmentDate} {item.appointmentTime}</td>
@@ -1975,8 +2079,20 @@ function App() {
                         <td style={{ fontWeight: 600 }}>{formatCurrency(item.packagePrice || item.price)}</td>
                         <td style={{ color: "#16a34a" }}>{formatCurrency(item.paidAmount)}</td>
                         <td style={{ color: "#dc2626" }}>{formatCurrency(item.balance)}</td>
+                        <td style={{ textAlign: "right" }}>
+                          {item.historyStatus === "Completed" && remainingSessions > 0 && (
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: "4px 10px", fontSize: "12px" }}
+                              onClick={() => openFollowUpForm(item, idx)}
+                            >
+                              Book Next Session ({remainingSessions})
+                            </button>
+                          )}
+                        </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -2406,6 +2522,7 @@ function App() {
                     value={appointmentPrice}
                     onChange={(e) => setAppointmentPrice(e.target.value)}
                     min="0"
+                    disabled={packagePriceLocked}
                   />
                 </div>
 
@@ -2417,6 +2534,7 @@ function App() {
                     value={paidAmount}
                     onChange={(e) => setPaidAmount(e.target.value)}
                     min="0"
+                    disabled={paidAmountLocked}
                   />
                 </div>
               </div>
@@ -2428,7 +2546,7 @@ function App() {
               <div className="modal-footer">
                 <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" className="btn-primary-cta">
-                  {editingIndex !== null ? "Save Rescheduled Booking" : "Confirm Booking"}
+                  {editingHistoryIndex !== null ? "Book Next Session" : editingIndex !== null ? "Save Rescheduled Booking" : "Confirm Booking"}
                 </button>
               </div>
             </form>
