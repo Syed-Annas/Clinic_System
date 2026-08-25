@@ -1078,10 +1078,18 @@ function App() {
   // ============================================================
 
   const dayAppointments = useMemo(() => {
-    return appointments
+    const activeForDay = appointments
       .map((apt, index) => ({ apt, index }))
       .filter(({ apt }) => apt.appointmentDate === selectedDate)
-  }, [appointments, selectedDate])
+    const completedForDay = appointmentHistory
+      .map((apt, historyIndex) => ({ apt, index: null, historyIndex, isHistorical: true }))
+      .filter(({ apt }) => (
+        apt.appointmentDate === selectedDate &&
+        (apt.historyStatus === "Completed" || apt.status === "Completed")
+      ))
+
+    return [...activeForDay, ...completedForDay]
+  }, [appointments, appointmentHistory, selectedDate])
 
   const filteredDayAppointments = useMemo(() => {
     return dayAppointments.filter(({ apt }) => {
@@ -1359,7 +1367,7 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredDayAppointments.map(({ apt, index }) => {
+                        {filteredDayAppointments.map(({ apt, index, isHistorical }) => {
                           const isSelected = selectedAppointment?.index === index
                           const roomObj = rooms.find((r) => r.roomId === apt.room)
                           const staffObj = staff.find((s) => s.userId === apt.therapist)
@@ -1433,7 +1441,7 @@ function App() {
                                   >
                                     💬
                                   </button>
-                                  <button
+                                  {!isHistorical && <button
                                     title="Delete"
                                     onClick={() => handleDeleteAppointment(index)}
                                     style={{
@@ -1447,7 +1455,7 @@ function App() {
                                     }}
                                   >
                                     🗑️
-                                  </button>
+                                  </button>}
                                 </div>
                               </td>
                             </tr>
@@ -1466,7 +1474,7 @@ function App() {
                       <p style={{ fontSize: "12px", marginTop: "4px" }}>Tap "+ New Appointment" to book a patient.</p>
                     </div>
                   ) : (
-                    filteredDayAppointments.map(({ apt, index }) => {
+                    filteredDayAppointments.map(({ apt, index, isHistorical }) => {
                       const roomObj = rooms.find((r) => r.roomId === apt.room)
                       const staffObj = staff.find((s) => s.userId === apt.therapist)
 
@@ -1511,6 +1519,7 @@ function App() {
                               style={{ padding: "4px 8px", fontSize: "12px", height: "30px", fontWeight: 600 }}
                               value={apt.status}
                               onChange={(e) => handleStatusChange(index, e.target.value)}
+                              disabled={isHistorical}
                             >
                               <option value="Booked">Booked</option>
                               <option value="Arrived">Arrived</option>
@@ -1522,15 +1531,15 @@ function App() {
                           </div>
 
                           <div className="mobile-card-actions">
-                            <button
+                            {!isHistorical && <button
                               className="mobile-btn-action"
                               style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}
                               onClick={() => handleWhatsAppRedirect(apt)}
                             >
                               💬 WhatsApp
-                            </button>
+                            </button>}
 
-                            {apt.status === "Arrived" && (
+                            {!isHistorical && apt.status === "Arrived" && (
                               <button
                                 className="mobile-btn-action"
                                 style={{ background: "#e0f2fe", color: "#0284c7", border: "1px solid #bae6fd" }}
@@ -1547,22 +1556,22 @@ function App() {
                               </button>
                             )}
 
-                            <button
+                            {!isHistorical && <button
                               className="mobile-btn-action"
                               style={{ background: "#f1f5f9", color: "var(--text-main)", border: "1px solid var(--border)" }}
                               onClick={() => openRescheduleForm(apt, index)}
                             >
                               🕒 Reschedule
-                            </button>
+                            </button>}
 
-                            <button
+                            {!isHistorical && <button
                               className="mobile-btn-action"
                               style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", maxWidth: "45px", minWidth: "36px" }}
                               onClick={() => handleDeleteAppointment(index)}
                               title="Delete"
                             >
                               🗑️
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       )
@@ -1660,6 +1669,7 @@ function App() {
                         className="form-control"
                         value={selectedAppointment.apt.status}
                         onChange={(e) => handleStatusChange(selectedAppointment.index, e.target.value)}
+                        disabled={selectedAppointment.isHistorical}
                         style={{ fontWeight: 600 }}
                       >
                         <option value="Booked">Booked</option>
@@ -1680,18 +1690,18 @@ function App() {
                     </button>
 
                     <div className="inspector-action-buttons">
-                      <button
+                      {!selectedAppointment.isHistorical && <button
                         className="btn-secondary"
                         onClick={() => openRescheduleForm(selectedAppointment.apt, selectedAppointment.index)}
                       >
                         🕒 Reschedule
-                      </button>
-                      <button
+                      </button>}
+                      {!selectedAppointment.isHistorical && <button
                         className="btn-danger"
                         onClick={() => handleDeleteAppointment(selectedAppointment.index)}
                       >
                         🗑️ Delete
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 ) : (
