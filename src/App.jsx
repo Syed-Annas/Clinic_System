@@ -1235,7 +1235,7 @@ function App() {
             📜 History ({appointmentHistory.length})
           </button>
 
-          {currentUser?.role === "Admin" && (
+          {["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
             <button
               className={`nav-tab-btn ${activeSection === "Clinic" ? "active" : ""}`}
               onClick={() => setActiveSection("Clinic")}
@@ -2103,7 +2103,7 @@ function App() {
         {/* ======================================================
             STAFF TAB
         ====================================================== */}
-        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Staff" && (
+        {activeSection === "Clinic" && ["Admin", "Manager", "Owner"].includes(currentUser?.role) && clinicSettingsTab === "Staff" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Staff & Therapists Management</h2>
@@ -2195,7 +2195,7 @@ function App() {
         {/* ======================================================
             TREATMENTS TAB
         ====================================================== */}
-        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Treatments" && (
+        {activeSection === "Clinic" && ["Admin", "Manager", "Owner"].includes(currentUser?.role) && clinicSettingsTab === "Treatments" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Treatments & Services Catalog</h2>
@@ -2283,7 +2283,7 @@ function App() {
         {/* ======================================================
             ROOMS TAB
         ====================================================== */}
-        {activeSection === "Clinic" && currentUser?.role === "Admin" && clinicSettingsTab === "Rooms" && (
+        {activeSection === "Clinic" && ["Admin", "Manager", "Owner"].includes(currentUser?.role) && clinicSettingsTab === "Rooms" && (
           <div className="content-card">
             <div className="content-header">
               <h2>Treatment Rooms & Suites</h2>
@@ -2362,7 +2362,7 @@ function App() {
         {/* ======================================================
             CLINIC SETTINGS TAB (ADMIN ONLY)
         ====================================================== */}
-        {activeSection === "Clinic" && currentUser?.role === "Admin" && (
+        {activeSection === "Clinic" && ["Admin", "Manager", "Owner"].includes(currentUser?.role) && (
           <div className="content-card" style={{ maxWidth: "700px" }}>
             <div className="content-header">
               <h2>Clinic Profile & Settings</h2>

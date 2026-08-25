@@ -56,6 +56,7 @@ export function useSupabaseStorage(key, initialValue) {
   const versionRef = useRef(getLocalVersion(key))
   const isHydratedRef = useRef(false)
   const saveTimerRef = useRef(null)
+  const retryTimerRef = useRef(null)
   const pendingSaveRef = useRef(null)
 
   const persistPendingSave = useCallback(async () => {
@@ -67,6 +68,19 @@ export function useSupabaseStorage(key, initialValue) {
       pendingSaveRef.current = null
     } else if (!saved) {
       console.error(`Cloud sync failed for ${key}; local data was preserved.`)
+      if (!retryTimerRef.current) {
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null
+          const retryPending = pendingSaveRef.current
+          if (retryPending) {
+            saveAppState(key, retryPending.version, retryPending.value).then((retrySaved) => {
+              if (retrySaved && pendingSaveRef.current?.version === retryPending.version) {
+                pendingSaveRef.current = null
+              }
+            })
+          }
+        }, 5000)
+      }
     }
   }, [key])
 
@@ -117,7 +131,8 @@ export function useSupabaseStorage(key, initialValue) {
           applyRemote(result.v, result.d)
         } else if (versionRef.current > result.v) {
           // Local data is newer than remote, sync to remote
-          saveAppState(key, versionRef.current, valueRef.current)
+          pendingSaveRef.current = { version: versionRef.current, value: valueRef.current }
+          persistPendingSave()
         }
       } else {
         // Remote key does not exist yet in Supabase.
@@ -144,8 +159,9 @@ export function useSupabaseStorage(key, initialValue) {
       cancelled = true
       unsub()
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
     }
-  }, [key])
+  }, [key, persistPendingSave])
 
   // Custom setter that updates state, localStorage, and syncs to Supabase
   const setValue = useCallback(
