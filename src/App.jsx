@@ -2683,6 +2683,19 @@ function App() {
                 </select>
               </div>
 
+              <div className="form-group">
+                <label>Number of Sessions *</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={appointmentSessions}
+                  onChange={(e) => setAppointmentSessions(Math.max(1, Number(e.target.value) || 1))}
+                  min="1"
+                  disabled={packagePriceLocked}
+                  required
+                />
+              </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label>Date *</label>
