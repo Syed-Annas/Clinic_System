@@ -1675,7 +1675,7 @@ function App() {
                               </button>
                             )}
 
-                            {!isHistorical && canDeleteAppointments && <button
+                            {!isHistorical && <button
                               className="mobile-btn-action"
                               style={{ background: "#f1f5f9", color: "var(--text-main)", border: "1px solid var(--border)" }}
                               onClick={() => openRescheduleForm(apt, index)}
@@ -1809,7 +1809,7 @@ function App() {
                     </button>
 
                     <div className="inspector-action-buttons">
-                      {!selectedAppointment.isHistorical && canDeleteAppointments && <button
+                      {!selectedAppointment.isHistorical && <button
                         className="btn-secondary"
                         onClick={() => openRescheduleForm(selectedAppointment.apt, selectedAppointment.index)}
                       >
