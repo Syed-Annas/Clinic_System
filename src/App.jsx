@@ -1553,6 +1553,23 @@ function App() {
                                   >
                                     💬
                                   </button>
+                                  {isHistorical && apt.historyStatus === "Completed" && !apt.followUpBooked && getRemainingSessions(apt) > 0 && (
+                                    <button
+                                      title="Book next session"
+                                      onClick={() => openFollowUpForm(apt, filteredDayAppointments.find((item) => item.apt === apt)?.historyIndex)}
+                                      style={{
+                                        background: "#dbeafe",
+                                        color: "#1d4ed8",
+                                        border: "1px solid #bfdbfe",
+                                        padding: "4px 8px",
+                                        borderRadius: "4px",
+                                        cursor: "pointer",
+                                        fontSize: "12px",
+                                      }}
+                                    >
+                                      📅
+                                    </button>
+                                  )}
                                   {!isHistorical && canDeleteAppointments && <button
                                     title="Delete"
                                     onClick={() => handleDeleteAppointment(index)}
@@ -1650,13 +1667,23 @@ function App() {
                           </div>
 
                           <div className="mobile-card-actions">
-                            {!isHistorical && <button
+                            <button
                               className="mobile-btn-action"
                               style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}
                               onClick={() => handleWhatsAppRedirect(apt)}
                             >
                               💬 WhatsApp
-                            </button>}
+                            </button>
+
+                            {isHistorical && apt.historyStatus === "Completed" && !apt.followUpBooked && getRemainingSessions(apt) > 0 && (
+                              <button
+                                className="mobile-btn-action"
+                                style={{ background: "#dbeafe", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
+                                onClick={() => openFollowUpForm(apt, filteredDayAppointments.find((item) => item.apt === apt)?.historyIndex)}
+                              >
+                                📅 Book Next Session ({getRemainingSessions(apt)})
+                              </button>
+                            )}
 
                             {!isHistorical && apt.status === "Arrived" && (
                               <button
@@ -1809,6 +1836,14 @@ function App() {
                     </button>
 
                     <div className="inspector-action-buttons">
+                      {selectedAppointment.isHistorical && selectedAppointment.apt.historyStatus === "Completed" && !selectedAppointment.apt.followUpBooked && getRemainingSessions(selectedAppointment.apt) > 0 && (
+                        <button
+                          className="btn-primary-cta"
+                          onClick={() => openFollowUpForm(selectedAppointment.apt, selectedAppointment.historyIndex)}
+                        >
+                          📅 Book Next Session ({getRemainingSessions(selectedAppointment.apt)})
+                        </button>
+                      )}
                       {!selectedAppointment.isHistorical && <button
                         className="btn-secondary"
                         onClick={() => openRescheduleForm(selectedAppointment.apt, selectedAppointment.index)}
