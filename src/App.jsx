@@ -17,6 +17,31 @@ function getBrowserSessionId() {
   }
 }
 
+function getStoredAuthSession() {
+  try {
+    const stored = localStorage.getItem("cs_auth_session")
+    return stored ? JSON.parse(stored) : null
+  } catch {
+    return null
+  }
+}
+
+function setStoredAuthSession(user) {
+  try {
+    localStorage.setItem("cs_auth_session", JSON.stringify(user))
+  } catch (err) {
+    console.error("Could not persist login session.", err)
+  }
+}
+
+function clearStoredAuthSession() {
+  try {
+    localStorage.removeItem("cs_auth_session")
+  } catch (err) {
+    console.error("Could not clear login session.", err)
+  }
+}
+
 function App() {
   // ============================================================
   // CLINIC
@@ -38,8 +63,8 @@ function App() {
   // LOGIN & AUTH
   // ============================================================
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState(getStoredAuthSession)
+  const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(getStoredAuthSession()))
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [browserSessionId] = useState(getBrowserSessionId)
@@ -70,6 +95,27 @@ function App() {
 
   const [activeStaff, setActiveStaff] = useSupabaseStorage("activeStaff", [])
   const [staffWorkLogs, setStaffWorkLogs] = useSupabaseStorage("staffWorkLogs", [])
+
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser || currentUser.role === "Admin") return
+
+    setActiveStaff((current) => {
+      if (current.some((member) => member.sessionId === currentUser.sessionId)) return current
+      const now = Date.now()
+      return [
+        ...current,
+        {
+          clinicId,
+          userId: currentUser.userId,
+          name: currentUser.name,
+          role: currentUser.role,
+          sessionId: currentUser.sessionId,
+          loggedInAt: now,
+          activeSince: now,
+        },
+      ]
+    })
+  }, [currentUser, isLoggedIn, setActiveStaff])
 
   // ============================================================
   // STAFF MANAGEMENT
@@ -400,7 +446,6 @@ function App() {
 
   const openFollowUpForm = (historyItem, historyIndex) => {
     const totalSessions = Number(historyItem.sessions) || 1
-    const sessionsUsed = historyItem.sessionsUsed === undefined ? 1 : Number(historyItem.sessionsUsed) || 0
     const remainingSessions = getRemainingSessions(historyItem)
     if (remainingSessions <= 0) return
 
@@ -447,34 +492,20 @@ function App() {
         role: "Admin",
       }
       setCurrentUser(adminUser)
+      setStoredAuthSession(adminUser)
       setIsLoggedIn(true)
       return
     }
 
     if (staffMember) {
-      const activeSessions = activeStaff.filter(
-        (member) => member.clinicId === clinicId && member.userId === staffMember.userId
-      )
-      const currentSessionExists = activeSessions.some(
-        (member) => member.sessionId === browserSessionId
-      )
-
-      if (!currentSessionExists && activeSessions.length >= 2) {
-        alert("This user is already logged in on two devices or browsers.")
-        return
-      }
-
-      setCurrentUser({ ...staffMember, sessionId: browserSessionId })
+      const loggedInUser = { ...staffMember, sessionId: browserSessionId }
+      setCurrentUser(loggedInUser)
+      setStoredAuthSession(loggedInUser)
       setIsLoggedIn(true)
 
       setActiveStaff((current) => {
         const alreadyActive = current.some((member) => member.sessionId === browserSessionId)
         if (alreadyActive) return current
-
-        const activeSessions = current.filter(
-          (member) => member.clinicId === clinicId && member.userId === staffMember.userId
-        )
-        if (activeSessions.length >= 2) return current
 
         const now = Date.now()
         return [
@@ -523,6 +554,7 @@ function App() {
     }
     setCurrentUser(null)
     setIsLoggedIn(false)
+    clearStoredAuthSession()
     setUsername("")
     setPassword("")
   }
