@@ -379,6 +379,15 @@ function App() {
     return start.toTimeString().slice(0, 5)
   }
 
+  const formatTime = (time) => {
+    if (!time) return "-"
+    const [hour, minute] = time.split(":").map(Number)
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return time
+    const suffix = hour >= 12 ? "PM" : "AM"
+    const displayHour = hour % 12 || 12
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`
+  }
+
   const resetAppointmentForm = () => {
     setCustomerName("")
     setPhoneNumber("")
@@ -953,7 +962,7 @@ function App() {
       `💉 *Treatment:* ${appointment.treatment}\n` +
       `🔢 *Sessions:* ${appointment.sessions || 1}\n` +
       `📅 *Date:* ${appointment.appointmentDate}\n` +
-      `⏰ *Time:* ${appointment.appointmentTime} - ${appointment.endTime}\n` +
+      `⏰ *Time:* ${formatTime(appointment.appointmentTime)} - ${formatTime(appointment.endTime)}\n` +
       `🚪 *Room:* ${roomName}\n` +
       `🩺 *Specialist:* ${therapistName}\n\n` +
       `💵 *Package Price:* Rs. ${Number(appointment.packagePrice || 0).toLocaleString()}\n` +
@@ -962,7 +971,7 @@ function App() {
       `📞 *Clinic Phone:* ${clinic.phone || "-"}\n` +
       `📍 *Address:* ${clinic.address || "-"}\n\n` +
       `Thank you for choosing ${clinic.name}!\n` +
-      `Operating Hours: ${clinic.openingTime} - ${clinic.closingTime}`
+      `Operating Hours: ${formatTime(clinic.openingTime)} - ${formatTime(clinic.closingTime)}`
     )
 
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank")
@@ -1436,7 +1445,7 @@ function App() {
               </div>
 
               <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-                Selected: <strong>{selectedDate}</strong> (Operating: {clinic.openingTime || "13:30"} - {clinic.closingTime || "21:00"})
+                Selected: <strong>{selectedDate}</strong> (Operating: {formatTime(clinic.openingTime || "13:30")} - {formatTime(clinic.closingTime || "21:00")})
               </div>
             </div>
 
@@ -1539,9 +1548,9 @@ function App() {
                               }}
                             >
                               <td style={{ fontWeight: 600 }}>
-                                {apt.appointmentTime}
+                                {formatTime(apt.appointmentTime)}
                                 <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 400 }}>
-                                  {apt.endTime} ({apt.duration}m)
+                                  {formatTime(apt.endTime)} ({apt.duration}m)
                                 </div>
                               </td>
 
@@ -1680,7 +1689,7 @@ function App() {
                           </div>
 
                           <div className="mobile-card-meta">
-                            <span>⏱️ <strong>{apt.appointmentTime}</strong> - {apt.endTime} ({apt.duration}m)</span>
+                            <span>⏱️ <strong>{formatTime(apt.appointmentTime)}</strong> - {formatTime(apt.endTime)} ({apt.duration}m)</span>
                             <span>💉 <strong>{apt.treatment}</strong></span>
                             {roomObj && <span>🚪 {roomObj.name}</span>}
                             {staffObj && <span>👤 {staffObj.name}</span>}
@@ -1798,7 +1807,7 @@ function App() {
                       </div>
                       <div className="inspector-row">
                         <span className="label">Schedule</span>
-                        <span className="val">{selectedAppointment.apt.appointmentTime} - {selectedAppointment.apt.endTime}</span>
+                        <span className="val">{formatTime(selectedAppointment.apt.appointmentTime)} - {formatTime(selectedAppointment.apt.endTime)}</span>
                       </div>
                       <div className="inspector-row">
                         <span className="label">Duration</span>
@@ -2303,7 +2312,7 @@ function App() {
                       return (
                       <tr key={item.appointmentId || idx}>
                         <td style={{ fontWeight: 600, color: "var(--primary)" }}>{item.receiptId || "-"}</td>
-                        <td>{item.appointmentDate} {item.appointmentTime}</td>
+                        <td>{item.appointmentDate} {formatTime(item.appointmentTime)}</td>
                         <td style={{ fontWeight: 600 }}>{item.customerName}</td>
                         <td>{item.treatment}</td>
                         <td>
@@ -2647,11 +2656,11 @@ function App() {
               </div>
               <div className="inspector-row">
                 <span className="label">Opening Time</span>
-                <span className="val">{clinic.openingTime}</span>
+                <span className="val">{formatTime(clinic.openingTime)}</span>
               </div>
               <div className="inspector-row">
                 <span className="label">Closing Time</span>
-                <span className="val">{clinic.closingTime}</span>
+                <span className="val">{formatTime(clinic.closingTime)}</span>
               </div>
             </div>
           </div>
@@ -2836,7 +2845,7 @@ function App() {
 
               {appointmentTime && treatment && (
                 <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px", background: "#f8fafc", padding: "6px 10px", borderRadius: "6px" }}>
-                  ⏰ Estimated End Time: <strong>{calculateEndTime(appointmentTime, getTreatmentDuration(treatment))}</strong> ({getTreatmentDuration(treatment)} mins)
+                  ⏰ Estimated End Time: <strong>{formatTime(calculateEndTime(appointmentTime, getTreatmentDuration(treatment)))}</strong> ({getTreatmentDuration(treatment)} mins)
                 </div>
               )}
 
