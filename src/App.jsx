@@ -1098,12 +1098,14 @@ function App() {
       }))
 
     return [...(paymentRecords || []), ...legacyPayments]
-      .filter((payment) => payment.receivedDate >= range.from && payment.receivedDate <= range.to)
       .map((payment) => {
         const appointment = records.find((item) => item.appointmentId === payment.appointmentId)
+        // Use appointment date as the effective received date (when payment is recorded for that session)
+        const effectiveReceivedDate = appointment?.appointmentDate || payment.receivedDate
         return {
           ...payment,
-          appointmentDate: payment.receivedDate,
+          receivedDate: effectiveReceivedDate,
+          appointmentDate: effectiveReceivedDate,
           customerName: appointment?.customerName || "Unknown customer",
           treatment: payment.treatment || appointment?.treatment || "Payment",
           status: "Payment Received",
@@ -1112,6 +1114,7 @@ function App() {
           balance: 0,
         }
       })
+      .filter((payment) => payment.receivedDate >= range.from && payment.receivedDate <= range.to)
   }, [appointments, appointmentHistory, paymentRecords])
 
   const getDashboardData = () => {
