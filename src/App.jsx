@@ -1132,17 +1132,16 @@ function App() {
 
     // ============================================================
     // REVENUE: Sum of package prices for packages CREATED on this date
-    // Only count each unique packageId once, on its creation date
+    // Only count each unique packageId once, on its EARLIEST appointment date (when package is first sold)
     // ============================================================
     const allRecords = [...(appointments || []), ...(appointmentHistory || [])]
     const packagesByCreatedDate = new Map()
     allRecords.forEach((item) => {
       const pkgId = item.packageId || item.appointmentId
-      if (!packagesByCreatedDate.has(pkgId)) {
-        const createdDate = item.createdAt 
-          ? new Date(item.createdAt).toLocaleDateString("en-CA")
-          : item.appointmentDate
-        packagesByCreatedDate.set(pkgId, { createdDate, packagePrice: Number(item.packagePrice || item.price || 0) })
+      const appointmentDate = item.appointmentDate || ""
+      // Store only if this is the earliest date for this packageId
+      if (!packagesByCreatedDate.has(pkgId) || appointmentDate < packagesByCreatedDate.get(pkgId).createdDate) {
+        packagesByCreatedDate.set(pkgId, { createdDate: appointmentDate, packagePrice: Number(item.packagePrice || item.price || 0) })
       }
     })
     const revenue = Array.from(packagesByCreatedDate.values())
