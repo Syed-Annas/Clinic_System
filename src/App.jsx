@@ -206,6 +206,7 @@ function App() {
   const [appointments, setAppointments] = useSupabaseStorage("appointments", [])
   const [appointmentHistory, setAppointmentHistory] = useSupabaseStorage("appointmentHistory", [])
   const [appointmentActivities, setAppointmentActivities] = useSupabaseStorage("appointmentActivities", [])
+  const [paymentRecords, setPaymentRecords] = useSupabaseStorage("paymentRecords", [])
 
   useEffect(() => {
     const cleanedHistory = appointmentHistory.filter(
@@ -448,11 +449,10 @@ function App() {
     setTreatment(appointment.treatment || "")
     setAppointmentSessions(Number(appointment.sessions) || getTreatmentSessions(appointment.treatment))
     setAppointmentPrice(Number(appointment.packagePrice) || getTreatmentPrice(appointment.treatment))
-    setPaidAmount(Number(appointment.paidAmount) || 0)
+    setPaidAmount(0)
     setEditingHistoryIndex(null)
-    setPackagePriceLocked(Number(appointment.sessionsUsed || 0) > 0)
+    setPackagePriceLocked(true)
     setPaidAmountLocked(
-      Number(appointment.sessionsUsed || 0) > 0 &&
       calculateBalance(Number(appointment.packagePrice || 0), Number(appointment.paidAmount || 0)) <= 0
     )
     setShowForm(true)
@@ -474,7 +474,7 @@ function App() {
     setTreatment(historyItem.treatment || "")
     setAppointmentSessions(totalSessions)
     setAppointmentPrice(Number(historyItem.packagePrice || historyItem.price || 0))
-    setPaidAmount(Number(historyItem.paidAmount || 0))
+    setPaidAmount(0)
     setPackagePriceLocked(true)
     setPaidAmountLocked(
       calculateBalance(Number(historyItem.packagePrice || historyItem.price || 0), Number(historyItem.paidAmount || 0)) <= 0
@@ -638,10 +638,10 @@ function App() {
     const duration = getTreatmentDuration(treatment)
     const endTime = calculateEndTime(appointmentTime, duration)
     const numericPrice = Number(appointmentPrice || 0)
-    const numericPaid = Number(paidAmount || 0)
+    const numericPayment = Number(paidAmount || 0)
 
-    if (numericPrice < 0 || numericPaid < 0) {
-      alert("Price and paid amount cannot be negative.")
+    if (numericPrice < 0 || numericPayment < 0) {
+      alert("Package price and payment cannot be negative.")
       return
     }
 
@@ -672,8 +672,14 @@ function App() {
       const totalSessions = Number(source?.sessions) || 1
       const sessionsUsed = Number(source?.sessionsUsed) || 0
       const remainingSessions = Number(source?.remainingSessions ?? totalSessions - sessionsUsed)
+      const previousPaid = Number(source?.paidAmount || 0)
+      const packagePrice = Number(source?.packagePrice || source?.price || 0)
       if (!source || remainingSessions <= 0) {
         alert("All sessions in this package have already been used.")
+        return
+      }
+      if (numericPayment > Math.max(0, packagePrice - previousPaid)) {
+        alert("Payment cannot be greater than the remaining balance.")
         return
       }
 
@@ -691,9 +697,9 @@ function App() {
         sessionsUsed,
         remainingSessions,
         packageId: source.packageId || source.appointmentId,
-        packagePrice: Number(source.packagePrice || source.price || 0),
-        paidAmount: numericPaid,
-        balance: calculateBalance(Number(source.packagePrice || source.price || 0), numericPaid),
+        packagePrice,
+        paidAmount: previousPaid + numericPayment,
+        balance: calculateBalance(packagePrice, previousPaid + numericPayment),
         room: availableRoom.roomId,
         therapist: "",
         rebookedFromAppointmentId: source.appointmentId,
@@ -704,6 +710,16 @@ function App() {
         },
       }
       setAppointments((current) => [...current, followUpAppointment])
+      if (numericPayment > 0) {
+        setPaymentRecords((current) => [...current, {
+          paymentId: `PAY${Date.now()}`,
+          appointmentId: followUpAppointment.appointmentId,
+          packageId: followUpAppointment.packageId,
+          amount: numericPayment,
+          receivedDate: todaySafe(),
+          receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
+        }])
+      }
       setAppointmentHistory((current) => current.map((item, index) => (
         index === editingHistoryIndex ? { ...item, followUpBooked: true } : item
       )))
@@ -715,6 +731,12 @@ function App() {
     if (editingIndex !== null) {
       // RESCHEDULE / EDIT
       const previous = appointments[editingIndex]
+      const lockedPrice = Number(previous.packagePrice || 0)
+      const previousPaid = Number(previous.paidAmount || 0)
+      if (numericPayment > Math.max(0, lockedPrice - previousPaid)) {
+        alert("Payment cannot be greater than the remaining balance.")
+        return
+      }
       const updated = {
         ...previous,
         customerName,
@@ -726,14 +748,24 @@ function App() {
         treatment,
         sessions: appointmentSessions,
         packagePrice: packagePriceLocked ? Number(previous.packagePrice || 0) : numericPrice,
-        paidAmount: numericPaid,
-        balance: calculateBalance(packagePriceLocked ? Number(previous.packagePrice || 0) : numericPrice, numericPaid),
+        paidAmount: previousPaid + numericPayment,
+        balance: calculateBalance(lockedPrice, previousPaid + numericPayment),
         room: availableRoom.roomId,
         rescheduledBy: {
           clinicId,
           userId: currentUser?.userId || username,
           name: currentUser?.name || username,
         },
+      }
+      if (numericPayment > 0) {
+        setPaymentRecords((current) => [...current, {
+          paymentId: `PAY${Date.now()}`,
+          appointmentId: updated.appointmentId,
+          packageId: updated.packageId || updated.appointmentId,
+          amount: numericPayment,
+          receivedDate: todaySafe(),
+          receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
+        }])
       }
 
       const nextAppointments = [...appointments]
@@ -762,8 +794,8 @@ function App() {
       treatment,
       sessions: appointmentSessions,
       packagePrice: numericPrice,
-      paidAmount: numericPaid,
-      balance: calculateBalance(numericPrice, numericPaid),
+      paidAmount: numericPayment,
+      balance: calculateBalance(numericPrice, numericPayment),
       status: "Booked",
       room: availableRoom.roomId,
       therapist: "",
@@ -779,6 +811,16 @@ function App() {
     }
 
     setAppointments([...appointments, newAppointment])
+    if (numericPayment > 0) {
+      setPaymentRecords((current) => [...current, {
+        paymentId: `PAY${Date.now()}`,
+        appointmentId: generatedAppointmentId,
+        packageId: generatedAppointmentId,
+        amount: numericPayment,
+        receivedDate: todaySafe(),
+        receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
+      }])
+    }
     setNextReceiptNumber((curr) => Number(curr) + 1)
     logAppointmentActivity(newAppointment, "Booked")
     resetAppointmentForm()
@@ -1167,6 +1209,12 @@ function App() {
 
   const formatCurrency = (val) => `Rs. ${Number(val || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
   const dashboardData = getDashboardData()
+  const existingPaidForForm = editingIndex !== null
+    ? Number(appointments[editingIndex]?.paidAmount || 0)
+    : editingHistoryIndex !== null
+      ? Number(appointmentHistory[editingHistoryIndex]?.paidAmount || 0)
+      : 0
+  const paymentBalanceForForm = calculateBalance(appointmentPrice, existingPaidForForm)
   const profileIncentive = useMemo(() => {
     if (!currentUser) return { receivedCash: 0, incentive: 0, fullyPaid: 0, appointments: 0 }
 
@@ -2710,6 +2758,7 @@ function App() {
                       if (autoTime) setAppointmentTime(autoTime)
                     }
                   }}
+                  disabled={editingIndex !== null || editingHistoryIndex !== null}
                   required
                 >
                   <option value="">Select Treatment</option>
@@ -2785,20 +2834,26 @@ function App() {
                 </div>
 
                 <div className="form-group">
-                  <label>Advance Paid (Rs.)</label>
+                  <label>{editingIndex !== null || editingHistoryIndex !== null ? "Additional Cash Received (Rs.)" : "Cash Received (Rs.)"}</label>
                   <input
                     type="number"
                     className="form-control"
                     value={paidAmount}
                     onChange={(e) => setPaidAmount(e.target.value)}
                     min="0"
+                    max={editingIndex !== null || editingHistoryIndex !== null ? paymentBalanceForForm : appointmentPrice}
                     disabled={paidAmountLocked}
                   />
                 </div>
               </div>
 
               <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)", marginBottom: "14px" }}>
-                Remaining Balance Due: <span style={{ color: "#dc2626" }}>{formatCurrency(calculateBalance(appointmentPrice, paidAmount))}</span>
+                {editingIndex !== null || editingHistoryIndex !== null ? "Current Balance Due" : "Remaining Balance Due"}: <span style={{ color: "#dc2626" }}>{formatCurrency(paymentBalanceForForm - Number(paidAmount || 0))}</span>
+                {(editingIndex !== null || editingHistoryIndex !== null) && (
+                  <span style={{ display: "block", color: "#64748b", fontWeight: 400, marginTop: "4px" }}>
+                    Already received: {formatCurrency(existingPaidForForm)}
+                  </span>
+                )}
               </div>
 
               <div className="modal-footer">
