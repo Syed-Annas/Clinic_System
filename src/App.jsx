@@ -745,7 +745,7 @@ function App() {
           appointmentId: followUpAppointment.appointmentId,
           packageId: followUpAppointment.packageId,
           amount: numericPayment,
-          receivedDate: todaySafe(),
+          receivedDate: followUpAppointment.appointmentDate,
           receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
         }])
       }
@@ -792,7 +792,7 @@ function App() {
           appointmentId: updated.appointmentId,
           packageId: updated.packageId || updated.appointmentId,
           amount: numericPayment,
-          receivedDate: todaySafe(),
+          receivedDate: appointmentDate,
           receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
         }])
       }
@@ -846,7 +846,7 @@ function App() {
         appointmentId: generatedAppointmentId,
         packageId: generatedAppointmentId,
         amount: numericPayment,
-        receivedDate: todaySafe(),
+        receivedDate: appointmentDate,
         receivedBy: { clinicId, userId: currentUser?.userId || username, name: currentUser?.name || username },
       }])
     }
