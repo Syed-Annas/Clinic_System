@@ -338,11 +338,18 @@ function App() {
 
     const openingMinutes = openingHour * 60 + openingMinute
     const closingMinutes = closingHour * 60 + closingMinute
+    let firstSlotMinutes = openingMinutes
+
+    if (date === todaySafe()) {
+      const now = new Date()
+      const currentMinutes = now.getHours() * 60 + now.getMinutes()
+      firstSlotMinutes = Math.max(openingMinutes, Math.ceil(currentMinutes / 15) * 15)
+    }
 
     const activeRooms = rooms.filter((room) => room.clinicId === clinicId && room.status === "Active")
     if (activeRooms.length === 0) return ""
 
-    for (let totalMinutes = openingMinutes; totalMinutes < closingMinutes; totalMinutes += 15) {
+    for (let totalMinutes = firstSlotMinutes; totalMinutes < closingMinutes; totalMinutes += 15) {
       const appointmentEndMinutes = totalMinutes + Number(duration)
       if (appointmentEndMinutes > closingMinutes) continue
 
@@ -377,6 +384,13 @@ function App() {
     const start = new Date(`1970-01-01T${startTime}:00`)
     start.setMinutes(start.getMinutes() + Number(duration))
     return start.toTimeString().slice(0, 5)
+  }
+
+  const getEarliestBookableTime = (date) => {
+    if (date !== todaySafe()) return undefined
+    const now = new Date()
+    const minutes = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
   }
 
   const formatTime = (time) => {
@@ -648,6 +662,12 @@ function App() {
     const endTime = calculateEndTime(appointmentTime, duration)
     const numericPrice = Number(appointmentPrice || 0)
     const numericPayment = Number(paidAmount || 0)
+
+    const earliestToday = getEarliestBookableTime(appointmentDate)
+    if (earliestToday && appointmentTime < earliestToday) {
+      alert(`Please choose a time from ${formatTime(earliestToday)} onward.`)
+      return
+    }
 
     if (numericPrice < 0 || numericPayment < 0) {
       alert("Package price and payment cannot be negative.")
@@ -2838,6 +2858,7 @@ function App() {
                     className="form-control"
                     value={appointmentTime}
                     onChange={(e) => setAppointmentTime(e.target.value)}
+                    min={getEarliestBookableTime(appointmentDate)}
                     required
                   />
                 </div>
