@@ -1100,8 +1100,8 @@ function App() {
     return [...(paymentRecords || []), ...legacyPayments]
       .map((payment) => {
         const appointment = records.find((item) => item.appointmentId === payment.appointmentId)
-        // Use appointment date as the effective received date (when payment is recorded for that session)
-        const effectiveReceivedDate = appointment?.appointmentDate || payment.receivedDate
+        // Use payment's recorded receivedDate; only fall back to appointment date if missing
+        const effectiveReceivedDate = payment.receivedDate || appointment?.appointmentDate
         return {
           ...payment,
           receivedDate: effectiveReceivedDate,
