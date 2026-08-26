@@ -1854,6 +1854,26 @@ function App() {
                       </div>
                     </div>
 
+                    <div className="inspector-section">
+                      <div className="inspector-row">
+                        <span className="label">Payment Transactions</span>
+                        <span className="val">{paymentRecords.filter((payment) => (
+                          payment.appointmentId === selectedAppointment.apt.appointmentId ||
+                          payment.packageId === selectedAppointment.apt.packageId
+                        )).length}</span>
+                      </div>
+                      {paymentRecords.filter((payment) => (
+                        payment.appointmentId === selectedAppointment.apt.appointmentId ||
+                        payment.packageId === selectedAppointment.apt.packageId
+                      )).map((payment) => (
+                        <div key={payment.paymentId} style={{ display: "flex", justifyContent: "space-between", gap: "8px", padding: "5px 0", borderTop: "1px solid var(--border)", fontSize: "12px" }}>
+                          <span>{payment.receivedDate || "Date unavailable"}</span>
+                          <strong style={{ color: "#15803d" }}>{formatCurrency(payment.amount)}</strong>
+                          <span>{payment.receivedBy?.name || "Unknown user"}</span>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* STATUS CHANGER */}
                     <div style={{ marginTop: "12px" }}>
                       <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
