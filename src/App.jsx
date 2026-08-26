@@ -1270,7 +1270,7 @@ function App() {
   }
 
   const formatCurrency = (val) => `Rs. ${Number(val || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
-  const dashboardData = getDashboardData()
+  const dashboardData = useMemo(() => getDashboardData(), [appointments, appointmentHistory, paymentRecords, dashboardPeriod, dashboardFromDate, dashboardToDate, incentiveRate, staff, clinicId])
   const existingPaidForForm = editingIndex !== null
     ? Number(appointments[editingIndex]?.paidAmount || 0)
     : editingHistoryIndex !== null
