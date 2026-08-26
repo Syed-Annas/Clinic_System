@@ -1163,12 +1163,15 @@ function App() {
     // 2. STAFF PERFORMANCE & SALES INCENTIVE (BASED ON PAID AMOUNT)
     // ============================================================
     const rateDecimal = Number(incentiveRate || 5) / 100
+    const appointmentMap = new Map()
+    records.forEach((item) => appointmentMap.set(item.appointmentId, item))
 
     receivedPayments.forEach((payment) => {
       const paid = Number(payment.amount || 0)
       const bookedByName = payment.receivedBy?.name || "Front Desk / Online"
       const bookedById = payment.receivedBy?.userId || "UNKNOWN"
-      const therapistId = item.therapist || ""
+      const appointment = appointmentMap.get(payment.appointmentId)
+      const therapistId = appointment?.therapist || ""
       const therapistStaff = staff.find((s) => s.userId === therapistId)
       const therapistName = therapistStaff ? therapistStaff.name : (therapistId || "Unassigned Specialist")
 
@@ -1199,7 +1202,7 @@ function App() {
           }
         }
         staffTherapyMap[therapistId].treatmentsCount += 1
-        staffTherapyMap[therapistId].sessionsCount += Number(item.sessions || 1)
+        staffTherapyMap[therapistId].sessionsCount += Number(appointment?.sessions || 1)
       }
     })
 
