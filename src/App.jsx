@@ -1126,8 +1126,34 @@ function App() {
     const validRecords = records.filter(
       (item) => item.status !== "Cancelled" && item.historyStatus !== "Cancelled" && item.status !== "No Show" && item.historyStatus !== "No Show" && item.historyStatus !== "Deleted"
     )
-    const revenue = receivedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
-    const collected = revenue
+
+    // ============================================================
+    // REVENUE: Sum of package prices for packages CREATED on this date
+    // Only count each unique packageId once, on its creation date
+    // ============================================================
+    const allRecords = [...(appointments || []), ...(appointmentHistory || [])]
+    const packagesByCreatedDate = new Map()
+    allRecords.forEach((item) => {
+      const pkgId = item.packageId || item.appointmentId
+      if (!packagesByCreatedDate.has(pkgId)) {
+        const createdDate = item.createdAt 
+          ? new Date(item.createdAt).toLocaleDateString("en-CA")
+          : item.appointmentDate
+        packagesByCreatedDate.set(pkgId, { createdDate, packagePrice: Number(item.packagePrice || item.price || 0) })
+      }
+    })
+    const revenue = Array.from(packagesByCreatedDate.values())
+      .filter((pkg) => pkg.createdDate >= range.from && pkg.createdDate <= range.to)
+      .reduce((sum, pkg) => sum + pkg.packagePrice, 0)
+
+    // ============================================================
+    // COLLECTED: Sum of payments RECEIVED on this date
+    // ============================================================
+    const collected = receivedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+
+    // ============================================================
+    // OUTSTANDING/DUE: Sum of all current balances
+    // ============================================================
     const outstanding = validRecords.reduce(
       (sum, item) => sum + Number(item.balance !== undefined ? item.balance : calculateBalance(item.packagePrice || item.price, item.paidAmount)),
       0
